@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../control/control_screen.dart';
+import '../control/presentation/control_screen.dart';
 
 class RoleSelectScreen extends StatelessWidget {
   const RoleSelectScreen({super.key});
