@@ -5,12 +5,13 @@ import '../domain/entity/fleet_vehicle.dart';
 import '../domain/repository/fleet_vehicle_repository.dart';
 
 class FleetVehicleRepositoryImpl implements FleetVehicleRepository {
-  FleetVehicleRepositoryImpl();
+  FleetVehicleRepositoryImpl({this.vehicleCount = 3});
 
+  final int vehicleCount;
   final _random = Random(42);
   final _controller = StreamController<List<FleetVehicle>>.broadcast();
   Timer? _timer;
-  List<FleetVehicle> _vehicles = _initialVehicles();
+  late List<FleetVehicle> _vehicles = _generateVehicles();
 
   @override
   Stream<List<FleetVehicle>> watch() {
@@ -36,12 +37,19 @@ class FleetVehicleRepositoryImpl implements FleetVehicleRepository {
     _controller.close();
   }
 
-  static List<FleetVehicle> _initialVehicles() {
+  // 서울 시청 중심 반경 ~2km 내 랜덤 배치
+  List<FleetVehicle> _generateVehicles() {
     final now = DateTime.now();
-    return [
-      FleetVehicle(vehicleId: 'V-001', lat: 37.5665, lng: 126.9780, heading: 45, speed: 30, capturedAt: now),
-      FleetVehicle(vehicleId: 'V-002', lat: 37.5700, lng: 126.9820, heading: 120, speed: 25, capturedAt: now),
-      FleetVehicle(vehicleId: 'V-003', lat: 37.5630, lng: 126.9750, heading: 270, speed: 0, capturedAt: now),
-    ];
+    return List.generate(vehicleCount, (i) {
+      final id = 'V-${(i + 1).toString().padLeft(3, '0')}';
+      return FleetVehicle(
+        vehicleId: id,
+        lat: 37.5665 + (_random.nextDouble() - 0.5) * 0.04,
+        lng: 126.9780 + (_random.nextDouble() - 0.5) * 0.04,
+        heading: _random.nextDouble() * 360,
+        speed: _random.nextDouble() * 60,
+        capturedAt: now,
+      );
+    });
   }
 }
