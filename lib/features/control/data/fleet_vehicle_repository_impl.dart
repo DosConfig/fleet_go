@@ -5,9 +5,13 @@ import '../domain/entity/fleet_vehicle.dart';
 import '../domain/repository/fleet_vehicle_repository.dart';
 
 class FleetVehicleRepositoryImpl implements FleetVehicleRepository {
-  FleetVehicleRepositoryImpl({this.vehicleCount = 3});
+  FleetVehicleRepositoryImpl({
+    this.vehicleCount = 3,
+    this.tickInterval = const Duration(seconds: 1),
+  });
 
   final int vehicleCount;
+  final Duration tickInterval;
   final _random = Random(42);
   final _controller = StreamController<List<FleetVehicle>>.broadcast();
   Timer? _timer;
@@ -15,7 +19,7 @@ class FleetVehicleRepositoryImpl implements FleetVehicleRepository {
 
   @override
   Stream<List<FleetVehicle>> watch() {
-    _timer ??= Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+    _timer ??= Timer.periodic(tickInterval, (_) => _tick());
     return _controller.stream;
   }
 
