@@ -13,7 +13,7 @@ dependencies:
   flutter_riverpod: ^3.3.2
   riverpod_annotation: ^4.0.3
   freezed_annotation: ^3.0.0
-  json_annotation: ^4.9.0
+  json_annotation: ^4.12.0
   flutter_naver_map: ^1.4.4
   flutter_dotenv: ^5.2.1
 

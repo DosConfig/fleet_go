@@ -49,3 +49,5 @@ docs/
 perf/
 ARCHITECTURE.md
 .flutter-plugins
+*.freezed.dart
+*.g.dart
