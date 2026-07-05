@@ -14,6 +14,14 @@ class ControlScreen extends ConsumerStatefulWidget {
 
 class _ControlScreenState extends ConsumerState<ControlScreen> {
   NaverMapController? _mapController;
+  // 마커 인스턴스 재사용. clearOverlays 제거의 핵심
+  final _markerCache = <String, NMarker>{};
+
+  @override
+  void dispose() {
+    _markerCache.clear();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,15 +34,33 @@ class _ControlScreenState extends ConsumerState<ControlScreen> {
         final vehicles = next.value;
         if (vehicles == null) return;
 
-        final markers = vehicles.map((v) {
-          return NMarker(
-            id: v.vehicleId,
-            position: NLatLng(v.lat, v.lng),
-          )..setCaption(NOverlayCaption(text: v.vehicleId));
-        }).toSet();
+        final currentIds = <String>{};
 
-        controller.clearOverlays();
-        controller.addOverlayAll(markers);
+        for (final v in vehicles) {
+          currentIds.add(v.vehicleId);
+          final existing = _markerCache[v.vehicleId];
+          if (existing != null) {
+            existing.setPosition(NLatLng(v.lat, v.lng));
+          } else {
+            final marker = NMarker(
+              id: v.vehicleId,
+              position: NLatLng(v.lat, v.lng),
+            )..setCaption(NOverlayCaption(text: v.vehicleId));
+            _markerCache[v.vehicleId] = marker;
+            controller.addOverlay(marker);
+          }
+        }
+
+        // 사라진 차량 제거. mock에선 차량 수 고정이라 실행 안 됨
+        final staleIds = _markerCache.keys
+            .where((id) => !currentIds.contains(id))
+            .toList();
+        for (final id in staleIds) {
+          controller.deleteOverlay(
+            NOverlayInfo(type: NOverlayType.marker, id: id),
+          );
+          _markerCache.remove(id);
+        }
       },
     );
 

@@ -6,7 +6,7 @@ import '../../features/control/domain/usecase/watch_fleet_vehicles.dart';
 
 part 'fleet_vehicle_providers.g.dart';
 
-// 3 → 50 → 300으로 바꿔가며 성능 확인. Pigeon 도입 후 복원
+// 3 → 50 → 300으로 바꿔가며 성능 확인
 const _kMockVehicleCount = 1000;
 const _kMockTickInterval = Duration(milliseconds: 500);
 
