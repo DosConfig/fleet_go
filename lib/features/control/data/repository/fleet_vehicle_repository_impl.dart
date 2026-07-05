@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:isolate';
 import 'dart:math';
 
-import '../domain/entity/fleet_vehicle.dart';
-import '../domain/repository/fleet_vehicle_repository.dart';
+import '../../domain/entity/fleet_vehicle.dart';
+import '../../domain/repository/fleet_vehicle_repository.dart';
 
 class _IsolateConfig {
   _IsolateConfig({required this.sendPort, required this.vehicleCount, required this.tickIntervalMs});

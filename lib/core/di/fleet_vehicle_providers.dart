@@ -1,6 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-import '../../features/control/data/fleet_vehicle_repository_impl.dart';
+import '../../features/control/data/repository/fleet_vehicle_repository_impl.dart';
 import '../../features/control/domain/repository/fleet_vehicle_repository.dart';
 import '../../features/control/domain/usecase/watch_fleet_vehicles.dart';
 
