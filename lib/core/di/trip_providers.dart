@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fleet_go/features/trip/domain/entity/trip_state.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../features/trip/data/repository/trip_repository_impl.dart';
@@ -33,4 +34,15 @@ AcceptTrip acceptTrip(Ref ref) {
 @riverpod
 AdvanceTrip advanceTrip(Ref ref) {
   return AdvanceTrip(ref.watch(tripRepositoryProvider), ref.watch(tripStateMachineProvider));
+}
+
+@riverpod
+Stream<TripState?> watchTrip(Ref ref, String tripId) {
+  final repo = ref.watch(tripRepositoryProvider);
+  return repo.watchTrip(tripId);
+}
+
+@riverpod
+Stream<List<(String, TripState)>> watchByStatus(Ref ref, String status) {
+  return ref.watch(tripRepositoryProvider).watchByStatus(status);
 }

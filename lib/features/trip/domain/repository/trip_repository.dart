@@ -4,5 +4,6 @@ import '../entity/trip_state.dart';
 abstract class TripRepository {
   Future<TripState?> getTrip(String tripId);
   Future<void> saveTrip(String tripId, TripState state);
+  Stream<TripState?> watchTrip(String tripId);
   Stream<List<(String tripId, TripState state)>> watchByStatus(String status);
 }

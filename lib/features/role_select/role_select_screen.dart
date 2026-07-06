@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../control/presentation/control_screen.dart';
+import '../trip/presentation/screens/driver_screen.dart';
+import '../trip/presentation/screens/passenger_screen.dart';
 
 class RoleSelectScreen extends StatelessWidget {
   const RoleSelectScreen({super.key});
@@ -14,23 +16,11 @@ class RoleSelectScreen extends StatelessWidget {
           children: [
             Text('Fleet Go', style: Theme.of(context).textTheme.headlineLarge),
             const SizedBox(height: 48),
-            _RoleButton(
-              icon: Icons.person,
-              label: '승객',
-              onTap: () => _push(context, const _PlaceholderScreen(title: '승객')),
-            ),
+            _RoleButton(icon: Icons.person, label: '승객', onTap: () => _push(context, const PassengerScreen())),
             const SizedBox(height: 16),
-            _RoleButton(
-              icon: Icons.drive_eta,
-              label: '드라이버',
-              onTap: () => _push(context, const _PlaceholderScreen(title: '드라이버')),
-            ),
+            _RoleButton(icon: Icons.drive_eta, label: '드라이버', onTap: () => _push(context, const DriverScreen())),
             const SizedBox(height: 16),
-            _RoleButton(
-              icon: Icons.monitor,
-              label: '관제',
-              onTap: () => _push(context, const ControlScreen()),
-            ),
+            _RoleButton(icon: Icons.monitor, label: '관제', onTap: () => _push(context, const ControlScreen())),
           ],
         ),
       ),
@@ -50,24 +40,6 @@ class _RoleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon),
-      label: Text(label),
-    );
-  }
-}
-
-/// 승객/드라이버 화면 구현 시 각 feature 폴더로 이동
-class _PlaceholderScreen extends StatelessWidget {
-  const _PlaceholderScreen({required this.title});
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(child: Text('$title 화면')),
-    );
+    return FilledButton.icon(onPressed: onTap, icon: Icon(icon), label: Text(label));
   }
 }
