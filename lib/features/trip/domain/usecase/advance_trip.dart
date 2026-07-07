@@ -14,19 +14,22 @@ class AdvanceTrip {
     String? cancelledBy,
     String? cancelReason,
     String? errorCode,
-  }) async {
-    final current = await _repo.getTrip(tripId);
-    if (current == null) throw Exception('Trip not found');
-
-    final next = _machine.transition(
-      current,
-      event,
-      cancelledBy: cancelledBy,
-      cancelReason: cancelReason,
-      errorCode: errorCode,
+  }) {
+    return _repo.transitionTrip(
+      tripId: tripId,
+      transition: (currentState) {
+        final nextState = _machine.transition(
+          currentState,
+          event,
+          cancelledBy: cancelledBy,
+          cancelReason: cancelReason,
+          errorCode: errorCode,
+        );
+        if (nextState == null) {
+          throw Exception('전이 불가: ${currentState.runtimeType} + ${event.name}');
+        }
+        return nextState;
+      },
     );
-
-    if (next == null) throw Exception('Invalid transition');
-    return _repo.saveTrip(tripId, next);
   }
 }

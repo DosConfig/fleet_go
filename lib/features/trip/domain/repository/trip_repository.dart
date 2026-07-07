@@ -6,4 +6,6 @@ abstract class TripRepository {
   Future<void> saveTrip(String tripId, TripState state);
   Stream<TripState?> watchTrip(String tripId);
   Stream<List<(String tripId, TripState state)>> watchByStatus(String status);
+
+  Future<void> transitionTrip({required String tripId, required TripState Function(TripState current) transition});
 }

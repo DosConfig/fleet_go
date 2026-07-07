@@ -8,12 +8,16 @@ class AcceptTrip {
   final TripRepository _repo;
   final TripStateMachine _machine;
 
-  Future<void> call({required String tripId, required String driverId}) async {
-    final current = await _repo.getTrip(tripId);
-    if (current == null) throw Exception('Trip not found');
-
-    final next = _machine.transition(current, TripEvent.accept, driverId: driverId);
-    if (next == null) throw Exception('Invalid transition');
-    return _repo.saveTrip(tripId, next);
+  Future<void> call({required String tripId, required String driverId}) {
+    return _repo.transitionTrip(
+      tripId: tripId,
+      transition: (currentState) {
+        final nextState = _machine.transition(currentState, TripEvent.accept, driverId: driverId);
+        if (nextState == null) {
+          throw Exception('수락 불가: 현재 상태 ${currentState.runtimeType}');
+        }
+        return nextState;
+      },
+    );
   }
 }

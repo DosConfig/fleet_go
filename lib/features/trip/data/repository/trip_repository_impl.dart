@@ -255,4 +255,29 @@ class TripRepositoryImpl implements TripRepository {
       return _toEntity(dto);
     });
   }
+
+  @override
+  Future<void> transitionTrip({
+    required String tripId,
+    required TripState Function(TripState current) transition,
+  }) async {
+    final docRef = _collection.doc(tripId);
+
+    await _firestore.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) {
+        throw Exception('Trip not found: $tripId');
+      }
+
+      final dto = TripDto.fromJson(snapshot.data()!);
+      final currentState = _toEntity(dto);
+      if (currentState == null) {
+        throw Exception('Invalid trip state in Firestore: ${dto.status}');
+      }
+
+      final nextState = transition(currentState);
+
+      transaction.set(docRef, _toDto(tripId, nextState).toJson());
+    });
+  }
 }
