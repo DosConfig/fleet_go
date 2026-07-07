@@ -7,6 +7,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+// 하드코딩 좌표 — TripState에 좌표 추가 후 교체
+const _kPickupLat = 37.4979;
+const _kPickupLng = 127.0276;
+const _kDestLat = 37.5547;
+const _kDestLng = 126.9707;
+
 class PassengerScreen extends ConsumerWidget {
   const PassengerScreen({super.key});
 
@@ -17,12 +23,15 @@ class PassengerScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('승객')),
       body: tripId == null
-          ? Center(child: _CallButton(onPressed: () => _requestTrip(ref, context)))
-          : _TripStatusView(tripId: tripId, onReset: () => ref.read(passengerTripIdProvider.notifier).set(null)),
+          ? _CallView(onCall: () => _requestTrip(ref, context))
+          : _TripTrackingView(tripId: tripId, onReset: () => ref.read(passengerTripIdProvider.notifier).set(null)),
     );
   }
 
   Future<void> _requestTrip(WidgetRef ref, BuildContext context) async {
+    if (ref.read(passengerLoadingProvider)) return;
+    ref.read(passengerLoadingProvider.notifier).set(true);
+
     final tripId = DateTime.now().millisecondsSinceEpoch.toString();
     try {
       await ref.read(requestTripProvider).call(tripId: tripId);
@@ -31,22 +40,63 @@ class PassengerScreen extends ConsumerWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('호출 실패: $e')));
       }
+    } finally {
+      ref.read(passengerLoadingProvider.notifier).set(false);
     }
   }
 }
 
-class _CallButton extends StatelessWidget {
-  const _CallButton({required this.onPressed});
-  final VoidCallback onPressed;
+class _CallView extends ConsumerWidget {
+  const _CallView({required this.onCall});
+  final VoidCallback onCall;
 
   @override
-  Widget build(BuildContext context) {
-    return FilledButton.icon(onPressed: onPressed, icon: const Icon(Icons.local_taxi), label: const Text('셔틀 호출'));
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isLoading = ref.watch(passengerLoadingProvider);
+
+    return Stack(
+      children: [
+        NaverMap(
+          options: NaverMapViewOptions(
+            initialCameraPosition: NCameraPosition(
+              target: const NLatLng(_kPickupLat, _kPickupLng),
+              zoom: 15,
+            ),
+          ),
+          onMapReady: (controller) {
+            final marker = NMarker(
+              id: 'my_location',
+              position: const NLatLng(_kPickupLat, _kPickupLng),
+            );
+            marker.setCaption(const NOverlayCaption(text: '현재 위치'));
+            controller.addOverlay(marker);
+          },
+        ),
+        Positioned(
+          left: 16,
+          right: 16,
+          bottom: 32,
+          child: SafeArea(
+            top: false,
+            child: FilledButton.icon(
+              onPressed: isLoading ? null : onCall,
+              icon: isLoading
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.local_taxi),
+              label: Text(isLoading ? '호출 중...' : '셔틀 호출'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 52),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
-class _TripStatusView extends ConsumerWidget {
-  const _TripStatusView({required this.tripId, required this.onReset});
+class _TripTrackingView extends ConsumerWidget {
+  const _TripTrackingView({required this.tripId, required this.onReset});
 
   final String tripId;
   final VoidCallback onReset;
@@ -54,52 +104,147 @@ class _TripStatusView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tripAsync = ref.watch(watchTripProvider(tripId));
-    return tripAsync.when(
-      data: (state) {
-        if (state == null) return const Center(child: Text('Trip을 찾을 수 없습니다'));
-        return _TripStatusContent(state: state, tripId: tripId, onReset: onReset);
-      },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('오류: $e')),
+    final routeAsync = ref.watch(tripRouteProvider(
+      startLat: _kPickupLat,
+      startLng: _kPickupLng,
+      endLat: _kDestLat,
+      endLng: _kDestLng,
+    ));
+
+    return Stack(
+      children: [
+        routeAsync.when(
+          data: (route) => _TrackingMap(route: route),
+          loading: () => NaverMap(
+            options: NaverMapViewOptions(
+              initialCameraPosition: NCameraPosition(
+                target: const NLatLng(_kPickupLat, _kPickupLng),
+                zoom: 15,
+              ),
+            ),
+          ),
+          error: (_, _) => NaverMap(
+            options: NaverMapViewOptions(
+              initialCameraPosition: NCameraPosition(
+                target: const NLatLng(_kPickupLat, _kPickupLng),
+                zoom: 15,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          left: 16,
+          right: 16,
+          bottom: 32,
+          child: SafeArea(
+            top: false,
+            child: tripAsync.when(
+              data: (state) {
+                if (state == null) return const SizedBox.shrink();
+                return _StatusCard(state: state, tripId: tripId, onReset: onReset);
+              },
+              loading: () => _StatusCardLoading(),
+              error: (e, _) => _StatusCardError(error: e.toString()),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _TripStatusContent extends ConsumerWidget {
-  const _TripStatusContent({required this.state, required this.tripId, required this.onReset});
+class _TrackingMap extends StatelessWidget {
+  const _TrackingMap({required this.route});
+  final RouteInfo route;
+
+  @override
+  Widget build(BuildContext context) {
+    final coords = route.coordinates;
+    if (coords.isEmpty) {
+      return NaverMap(
+        options: NaverMapViewOptions(
+          initialCameraPosition: NCameraPosition(
+            target: const NLatLng(_kPickupLat, _kPickupLng),
+            zoom: 15,
+          ),
+        ),
+      );
+    }
+
+    final pathCoords = coords.map((c) => NLatLng(c.lat, c.lng)).toList();
+
+    return NaverMap(
+      options: NaverMapViewOptions(
+        initialCameraPosition: NCameraPosition(target: pathCoords.first, zoom: 13),
+      ),
+      onMapReady: (controller) {
+        controller.addOverlay(NPathOverlay(
+          id: 'route',
+          coords: pathCoords,
+          color: Colors.blue,
+          width: 4,
+        ));
+
+        final pickupMarker = NMarker(id: 'pickup', position: pathCoords.first);
+        pickupMarker.setCaption(const NOverlayCaption(text: '출발'));
+        controller.addOverlay(pickupMarker);
+
+        final destMarker = NMarker(id: 'destination', position: pathCoords.last);
+        destMarker.setCaption(const NOverlayCaption(text: '도착'));
+        controller.addOverlay(destMarker);
+
+        final bounds = NLatLngBounds.from(pathCoords);
+        controller.updateCamera(
+          NCameraUpdate.fitBounds(bounds, padding: const EdgeInsets.all(48)),
+        );
+      },
+    );
+  }
+}
+
+class _StatusCard extends StatelessWidget {
+  const _StatusCard({required this.state, required this.tripId, required this.onReset});
 
   final TripState state;
   final String tripId;
   final VoidCallback onReset;
 
   bool get _isTerminal => state is TripCompleted || state is TripCancelled || state is TripFailed;
-  bool get _showMap => state is! TripIdle && state is! TripDispatchProposed && !_isTerminal;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (!_showMap) {
-      return _StatusPanel(state: state, tripId: tripId, isTerminal: _isTerminal, onReset: onReset);
-    }
-
-    // 하드코딩 좌표 — TripState에 좌표 추가 후 교체
-    final routeAsync = ref.watch(tripRouteProvider(
-      startLat: 37.4979,
-      startLng: 127.0276,
-      endLat: 37.5547,
-      endLng: 126.9707,
-    ));
-
-    return Column(
-      children: [
-        Expanded(
-          child: routeAsync.when(
-            data: (route) => _PassengerMap(route: route),
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('경로 조회 실패: $e')),
-          ),
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Icon(_statusIcon(state), size: 20, color: _statusColor(state)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(_statusLabel(state), style: Theme.of(context).textTheme.titleMedium),
+                ),
+              ],
+            ),
+            if (state is TripDispatchProposed) ...[
+              const SizedBox(height: 12),
+              const LinearProgressIndicator(),
+              const SizedBox(height: 8),
+              Text('드라이버를 찾고 있습니다', style: Theme.of(context).textTheme.bodySmall),
+            ],
+            if (_isTerminal) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(onPressed: onReset, child: const Text('새 호출')),
+              ),
+            ],
+          ],
         ),
-        _StatusPanel(state: state, tripId: tripId, isTerminal: _isTerminal, onReset: onReset),
-      ],
+      ),
     );
   }
 
@@ -117,86 +262,66 @@ class _TripStatusContent extends ConsumerWidget {
       TripFailed() => '오류 발생',
     };
   }
+
+  static IconData _statusIcon(TripState state) {
+    return switch (state) {
+      TripDispatchProposed() => Icons.search,
+      TripAccepted() => Icons.person_pin,
+      TripNavigatingToPickup() => Icons.directions_car,
+      TripArrivedAtPickup() => Icons.place,
+      TripPassengerPickedUp() => Icons.airline_seat_recline_normal,
+      TripNavigatingToDestination() => Icons.navigation,
+      TripCompleted() => Icons.check_circle,
+      TripCancelled() => Icons.cancel,
+      TripFailed() => Icons.error,
+      _ => Icons.info,
+    };
+  }
+
+  static Color _statusColor(TripState state) {
+    return switch (state) {
+      TripDispatchProposed() => Colors.orange,
+      TripAccepted() || TripNavigatingToPickup() || TripArrivedAtPickup() => Colors.blue,
+      TripPassengerPickedUp() || TripNavigatingToDestination() => Colors.green,
+      TripCompleted() => Colors.green,
+      TripCancelled() || TripFailed() => Colors.red,
+      _ => Colors.grey,
+    };
+  }
 }
 
-class _PassengerMap extends StatelessWidget {
-  const _PassengerMap({required this.route});
-  final RouteInfo route;
-
+class _StatusCardLoading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final coords = route.coordinates;
-    if (coords.isEmpty) return const Center(child: Text('경로 없음'));
-
-    final pathCoords = coords.map((c) => NLatLng(c.lat, c.lng)).toList();
-    final start = pathCoords.first;
-    final end = pathCoords.last;
-
-    return NaverMap(
-      options: NaverMapViewOptions(
-        initialCameraPosition: NCameraPosition(target: start, zoom: 13),
+    return const Card(
+      elevation: 4,
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+            SizedBox(width: 12),
+            Text('상태 확인 중...'),
+          ],
+        ),
       ),
-      onMapReady: (controller) {
-        final path = NPathOverlay(
-          id: 'route',
-          coords: pathCoords,
-          color: Colors.blue,
-          width: 4,
-        );
-        controller.addOverlay(path);
-
-        final pickupMarker = NMarker(id: 'pickup', position: start);
-        pickupMarker.setCaption(const NOverlayCaption(text: '출발'));
-        controller.addOverlay(pickupMarker);
-
-        final destMarker = NMarker(id: 'destination', position: end);
-        destMarker.setCaption(const NOverlayCaption(text: '도착'));
-        controller.addOverlay(destMarker);
-
-        // 드라이버 마커는 W4에서 RTDB 실시간 위치 연동 시 추가
-
-        final bounds = NLatLngBounds.from(pathCoords);
-        controller.updateCamera(
-          NCameraUpdate.fitBounds(bounds, padding: const EdgeInsets.all(48)),
-        );
-      },
     );
   }
 }
 
-class _StatusPanel extends StatelessWidget {
-  const _StatusPanel({required this.state, required this.tripId, required this.isTerminal, required this.onReset});
-
-  final TripState state;
-  final String tripId;
-  final bool isTerminal;
-  final VoidCallback onReset;
+class _StatusCardError extends StatelessWidget {
+  const _StatusCardError({required this.error});
+  final String error;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 8, offset: const Offset(0, -2))],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(_TripStatusContent._statusLabel(state), style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            Text('Trip ID: $tripId', style: Theme.of(context).textTheme.bodySmall),
-            if (isTerminal) ...[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(onPressed: onReset, child: const Text('새 호출')),
-              ),
-            ],
-          ],
-        ),
+    return Card(
+      elevation: 4,
+      color: Theme.of(context).colorScheme.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text('오류: $error', style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer)),
       ),
     );
   }

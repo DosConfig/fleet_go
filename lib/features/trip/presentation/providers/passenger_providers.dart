@@ -9,3 +9,11 @@ class PassengerTripId extends _$PassengerTripId {
 
   void set(String? id) => state = id;
 }
+
+@riverpod
+class PassengerLoading extends _$PassengerLoading {
+  @override
+  bool build() => false;
+
+  void set(bool value) => state = value;
+}

@@ -20,6 +20,8 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<AppUser> signInWithGoogle() async {
+    // google_sign_in 7.x: 이전 세션 잔류 시 authenticate()가 silent 복원 시도 후 실패할 수 있음
+    await _googleSignIn.signOut();
     final googleUser = await _googleSignIn.authenticate();
     final googleAuth = googleUser.authentication;
     final credential = GoogleAuthProvider.credential(
