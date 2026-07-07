@@ -1,6 +1,3 @@
-import 'package:firebase_database/firebase_database.dart';
-import 'package:fleet_go/features/location/data/repository/location_repository_impl.dart';
-import 'package:fleet_go/features/location/domain/repository/location_repository.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../features/control/data/repository/fleet_vehicle_repository_impl.dart';
@@ -24,9 +21,4 @@ FleetVehicleRepository fleetVehicleRepository(Ref ref) {
 WatchFleetVehicles watchFleetVehicles(Ref ref) {
   final repo = ref.watch(fleetVehicleRepositoryProvider);
   return WatchFleetVehicles(repo);
-}
-
-@riverpod
-LocationRepository locationRepository(Ref ref) {
-  return LocationRepositoryImpl(FirebaseDatabase.instance);
 }
