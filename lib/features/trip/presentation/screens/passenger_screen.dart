@@ -168,17 +168,36 @@ class _TripTrackingView extends ConsumerWidget {
   }
 }
 
-class _TrackingMap extends ConsumerWidget {
+class _TrackingMap extends ConsumerStatefulWidget {
   const _TrackingMap({required this.route, this.driverId});
   final RouteInfo route;
   final String? driverId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final coords = route.coordinates;
-    final driverLocation = driverId != null
-        ? ref.watch(watchDriverLocationStreamProvider(driverId!)).value
-        : null;
+  ConsumerState<_TrackingMap> createState() => _TrackingMapState();
+}
+
+class _TrackingMapState extends ConsumerState<_TrackingMap> {
+  NaverMapController? _controller;
+  NMarker? _driverMarker;
+
+  @override
+  Widget build(BuildContext context) {
+    final coords = widget.route.coordinates;
+
+    if (widget.driverId != null) {
+      final driverLocation = ref.watch(watchDriverLocationStreamProvider(widget.driverId!)).value;
+      if (driverLocation != null && _controller != null) {
+        final pos = NLatLng(driverLocation.lat, driverLocation.lng);
+        if (_driverMarker == null) {
+          _driverMarker = NMarker(id: 'driver', position: pos);
+          _driverMarker!.setCaption(const NOverlayCaption(text: '드라이버'));
+          _controller!.addOverlay(_driverMarker!);
+        } else {
+          _driverMarker!.setPosition(pos);
+        }
+      }
+    }
 
     if (coords.isEmpty) {
       return NaverMap(
@@ -188,6 +207,7 @@ class _TrackingMap extends ConsumerWidget {
             zoom: 15,
           ),
         ),
+        onMapReady: (controller) => _controller = controller,
       );
     }
 
@@ -198,6 +218,8 @@ class _TrackingMap extends ConsumerWidget {
         initialCameraPosition: NCameraPosition(target: pathCoords.first, zoom: 13),
       ),
       onMapReady: (controller) {
+        _controller = controller;
+
         controller.addOverlay(NPathOverlay(
           id: 'route',
           coords: pathCoords,
@@ -212,15 +234,6 @@ class _TrackingMap extends ConsumerWidget {
         final destMarker = NMarker(id: 'destination', position: pathCoords.last);
         destMarker.setCaption(const NOverlayCaption(text: '도착'));
         controller.addOverlay(destMarker);
-
-        if (driverLocation != null) {
-          final driverMarker = NMarker(
-            id: 'driver',
-            position: NLatLng(driverLocation.lat, driverLocation.lng),
-          );
-          driverMarker.setCaption(const NOverlayCaption(text: '드라이버'));
-          controller.addOverlay(driverMarker);
-        }
 
         final bounds = NLatLngBounds.from(pathCoords);
         controller.updateCamera(
