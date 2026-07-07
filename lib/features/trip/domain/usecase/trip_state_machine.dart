@@ -10,48 +10,81 @@ class TripStateMachine {
     String? cancelledBy,
     String? cancelReason,
     String? errorCode,
+    double? originLat,
+    double? originLng,
+    double? destLat,
+    double? destLng,
   }) {
     final now = DateTime.now();
 
     return switch ((current, event)) {
-      // 정상 흐름 (단방향)
-      (TripIdle _, TripEvent.propose) when tripId != null => TripState.dispatchProposed(
-        tripId: tripId,
-        proposedAt: now,
-      ),
+      (TripIdle _, TripEvent.propose)
+          when tripId != null && originLat != null && originLng != null && destLat != null && destLng != null =>
+        TripState.dispatchProposed(
+          tripId: tripId,
+          proposedAt: now,
+          originLat: originLat,
+          originLng: originLng,
+          destLat: destLat,
+          destLng: destLng,
+        ),
 
       (TripDispatchProposed s, TripEvent.accept) when driverId != null => TripState.accepted(
         tripId: s.tripId,
         driverId: driverId,
         acceptedAt: now,
+        originLat: s.originLat,
+        originLng: s.originLng,
+        destLat: s.destLat,
+        destLng: s.destLng,
       ),
 
       (TripAccepted s, TripEvent.startNavToPickup) => TripState.navigatingToPickup(
         tripId: s.tripId,
         driverId: s.driverId,
+        originLat: s.originLat,
+        originLng: s.originLng,
+        destLat: s.destLat,
+        destLng: s.destLng,
       ),
 
       (TripNavigatingToPickup s, TripEvent.arriveAtPickup) => TripState.arrivedAtPickup(
         tripId: s.tripId,
         driverId: s.driverId,
         arrivedAt: now,
+        originLat: s.originLat,
+        originLng: s.originLng,
+        destLat: s.destLat,
+        destLng: s.destLng,
       ),
 
       (TripArrivedAtPickup s, TripEvent.pickUpPassenger) => TripState.passengerPickedUp(
         tripId: s.tripId,
         driverId: s.driverId,
         pickedUpAt: now,
+        originLat: s.originLat,
+        originLng: s.originLng,
+        destLat: s.destLat,
+        destLng: s.destLng,
       ),
 
       (TripPassengerPickedUp s, TripEvent.startNavToDestination) => TripState.navigatingToDestination(
         tripId: s.tripId,
         driverId: s.driverId,
+        originLat: s.originLat,
+        originLng: s.originLng,
+        destLat: s.destLat,
+        destLng: s.destLng,
       ),
 
       (TripNavigatingToDestination s, TripEvent.complete) => TripState.completed(
         tripId: s.tripId,
         driverId: s.driverId,
         completedAt: now,
+        originLat: s.originLat,
+        originLng: s.originLng,
+        destLat: s.destLat,
+        destLng: s.destLng,
       ),
 
       // 취소: 승객 탑승 전까지만
@@ -87,7 +120,6 @@ class TripStateMachine {
         failedAt: now,
       ),
 
-      // 불가능한 전이
       _ => null,
     };
   }

@@ -1,10 +1,10 @@
 import 'package:fleet_go/core/di/auth_providers.dart';
 import 'package:fleet_go/core/di/trip_providers.dart';
 import 'package:fleet_go/features/route/domain/entity/route_info.dart';
+import 'package:fleet_go/features/route/presentation/providers/route_state_provider.dart';
 import 'package:fleet_go/features/trip/domain/entity/trip_event.dart';
 import 'package:fleet_go/features/trip/domain/entity/trip_state.dart';
 import 'package:fleet_go/features/trip/presentation/providers/driver_providers.dart';
-import 'package:fleet_go/features/route/presentation/providers/route_state_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,10 +19,13 @@ class DriverScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('드라이버')),
       body: activeTripId == null
           ? _ProposedList(onAccept: (tripId) => _acceptTrip(ref, context, tripId))
-          : _ActiveTripView(tripId: activeTripId, onBack: () {
-              ref.read(driverLocationSenderProvider.notifier).stop();
-              ref.read(driverTripIdProvider.notifier).set(null);
-            }),
+          : _ActiveTripView(
+              tripId: activeTripId,
+              onBack: () {
+                ref.read(driverLocationSenderProvider.notifier).stop();
+                ref.read(driverTripIdProvider.notifier).set(null);
+              },
+            ),
     );
   }
 
@@ -127,32 +130,68 @@ class _ActiveTripContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // TODO: 하드코딩 좌표 — TripState에 좌표 추가 후 교체
-    final routeAsync = ref.watch(tripRouteProvider(
-      startLat: 37.4979,
-      startLng: 127.0276,
-      endLat: 37.5547,
-      endLng: 126.9707,
-    ));
+    final coords = _extractCoords(state);
+
+    final routeAsync = coords != null
+        ? ref.watch(tripRouteProvider(startLat: coords.$1, startLng: coords.$2, endLat: coords.$3, endLng: coords.$4))
+        : null;
 
     return Column(
       children: [
         Expanded(
-          child: routeAsync.when(
-            data: (route) => _RouteMap(route: route),
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('경로 조회 실패: $e')),
-          ),
+          child: routeAsync != null
+              ? routeAsync.when(
+                  data: (route) => _RouteMap(route: route),
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (e, _) => Center(child: Text('경로 조회 실패: $e')),
+                )
+              : const Center(child: CircularProgressIndicator()),
         ),
-        _TripControlPanel(
-          state: state,
-          tripId: tripId,
-          isTerminal: _isTerminal,
-          onAdvance: onAdvance,
-          onBack: onBack,
-        ),
+        _TripControlPanel(state: state, tripId: tripId, isTerminal: _isTerminal, onAdvance: onAdvance, onBack: onBack),
       ],
     );
+  }
+
+  static (double, double, double, double)? _extractCoords(TripState state) {
+    return switch (state) {
+      TripAccepted(:final originLat, :final originLng, :final destLat, :final destLng) => (
+        originLat,
+        originLng,
+        destLat,
+        destLng,
+      ),
+      TripNavigatingToPickup(:final originLat, :final originLng, :final destLat, :final destLng) => (
+        originLat,
+        originLng,
+        destLat,
+        destLng,
+      ),
+      TripArrivedAtPickup(:final originLat, :final originLng, :final destLat, :final destLng) => (
+        originLat,
+        originLng,
+        destLat,
+        destLng,
+      ),
+      TripPassengerPickedUp(:final originLat, :final originLng, :final destLat, :final destLng) => (
+        originLat,
+        originLng,
+        destLat,
+        destLng,
+      ),
+      TripNavigatingToDestination(:final originLat, :final originLng, :final destLat, :final destLng) => (
+        originLat,
+        originLng,
+        destLat,
+        destLng,
+      ),
+      TripCompleted(:final originLat, :final originLng, :final destLat, :final destLng) => (
+        originLat,
+        originLng,
+        destLat,
+        destLng,
+      ),
+      _ => null,
+    };
   }
 
   static TripEvent? _nextEvent(TripState state) {
@@ -206,22 +245,13 @@ class _RouteMap extends StatelessWidget {
     final center = pathCoords[pathCoords.length ~/ 2];
 
     return NaverMap(
-      options: NaverMapViewOptions(
-        initialCameraPosition: NCameraPosition(target: center, zoom: 13),
-      ),
+      options: NaverMapViewOptions(initialCameraPosition: NCameraPosition(target: center, zoom: 13)),
       onMapReady: (controller) {
-        final path = NPathOverlay(
-          id: 'route',
-          coords: pathCoords,
-          color: Colors.blue,
-          width: 4,
-        );
+        final path = NPathOverlay(id: 'route', coords: pathCoords, color: Theme.of(context).colorScheme.primary, width: 4);
         controller.addOverlay(path);
 
         final bounds = NLatLngBounds.from(pathCoords);
-        controller.updateCamera(
-          NCameraUpdate.fitBounds(bounds, padding: const EdgeInsets.all(48)),
-        );
+        controller.updateCamera(NCameraUpdate.fitBounds(bounds, padding: const EdgeInsets.all(48)));
       },
     );
   }
@@ -250,7 +280,7 @@ class _TripControlPanel extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 8, offset: const Offset(0, -2))],
+        boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.1), blurRadius: 8, offset: const Offset(0, -2))],
       ),
       child: SafeArea(
         top: false,

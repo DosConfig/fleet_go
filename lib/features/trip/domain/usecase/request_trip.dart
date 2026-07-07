@@ -9,8 +9,22 @@ class RequestTrip {
   final TripRepository _repo;
   final TripStateMachine _machine;
 
-  Future<void> call({required String tripId}) {
-    final state = _machine.transition(const TripState.idle(), TripEvent.propose, tripId: tripId);
+  Future<void> call({
+    required String tripId,
+    required double originLat,
+    required double originLng,
+    required double destLat,
+    required double destLng,
+  }) {
+    final state = _machine.transition(
+      const TripState.idle(),
+      TripEvent.propose,
+      tripId: tripId,
+      originLat: originLat,
+      originLng: originLng,
+      destLat: destLat,
+      destLng: destLng,
+    );
 
     if (state == null) throw Exception('Invalid transition');
     return _repo.saveTrip(tripId, state);

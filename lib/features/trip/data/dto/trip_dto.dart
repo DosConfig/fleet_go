@@ -12,6 +12,10 @@ abstract class TripDto with _$TripDto {
     String? cancelledBy,
     String? cancelReason,
     String? errorCode,
+    double? originLat,
+    double? originLng,
+    double? destLat,
+    double? destLng,
     DateTime? proposedAt,
     DateTime? acceptedAt,
     DateTime? arrivedAt,
@@ -21,6 +25,5 @@ abstract class TripDto with _$TripDto {
     DateTime? failedAt,
   }) = _TripDto;
 
-  factory TripDto.fromJson(Map<String, dynamic> json) =>
-      _$TripDtoFromJson(json);
+  factory TripDto.fromJson(Map<String, dynamic> json) => _$TripDtoFromJson(json);
 }

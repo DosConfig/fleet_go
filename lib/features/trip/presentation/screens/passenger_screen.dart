@@ -8,11 +8,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// TODO: 하드코딩 좌표 — TripState에 좌표 추가 후 교체
-const _kPickupLat = 37.4979;
-const _kPickupLng = 127.0276;
-const _kDestLat = 37.5547;
-const _kDestLng = 126.9707;
+// TODO: 승객 위치 선택 UI 추가 시 제거
+const _kDefaultOriginLat = 37.4979;
+const _kDefaultOriginLng = 127.0276;
+const _kDefaultDestLat = 37.5547;
+const _kDefaultDestLng = 126.9707;
 
 class PassengerScreen extends ConsumerWidget {
   const PassengerScreen({super.key});
@@ -35,7 +35,15 @@ class PassengerScreen extends ConsumerWidget {
 
     final tripId = DateTime.now().millisecondsSinceEpoch.toString();
     try {
-      await ref.read(requestTripProvider).call(tripId: tripId);
+      await ref
+          .read(requestTripProvider)
+          .call(
+            tripId: tripId,
+            originLat: _kDefaultOriginLat,
+            originLng: _kDefaultOriginLng,
+            destLat: _kDefaultDestLat,
+            destLng: _kDefaultDestLng,
+          );
       ref.read(passengerTripIdProvider.notifier).set(tripId);
     } catch (e) {
       if (context.mounted) {
@@ -60,15 +68,12 @@ class _CallView extends ConsumerWidget {
         NaverMap(
           options: NaverMapViewOptions(
             initialCameraPosition: NCameraPosition(
-              target: const NLatLng(_kPickupLat, _kPickupLng),
+              target: const NLatLng(_kDefaultOriginLat, _kDefaultOriginLng),
               zoom: 15,
             ),
           ),
           onMapReady: (controller) {
-            final marker = NMarker(
-              id: 'my_location',
-              position: const NLatLng(_kPickupLat, _kPickupLng),
-            );
+            final marker = NMarker(id: 'my_location', position: const NLatLng(_kDefaultOriginLat, _kDefaultOriginLng));
             marker.setCaption(const NOverlayCaption(text: '현재 위치'));
             controller.addOverlay(marker);
           },
@@ -82,12 +87,17 @@ class _CallView extends ConsumerWidget {
             child: FilledButton.icon(
               onPressed: isLoading ? null : onCall,
               icon: isLoading
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Theme.of(context).colorScheme.onPrimary,
+                      ),
+                    )
                   : const Icon(Icons.local_taxi),
               label: Text(isLoading ? '호출 중...' : '셔틀 호출'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(double.infinity, 52),
-              ),
+              style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 52)),
             ),
           ),
         ),
@@ -105,36 +115,32 @@ class _TripTrackingView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tripAsync = ref.watch(watchTripProvider(tripId));
-    final routeAsync = ref.watch(tripRouteProvider(
-      startLat: _kPickupLat,
-      startLng: _kPickupLng,
-      endLat: _kDestLat,
-      endLng: _kDestLng,
-    ));
 
-    final driverId = _extractDriverId(tripAsync.value);
+    final tripState = tripAsync.value;
+    final coords = _extractCoords(tripState);
+    final driverId = _extractDriverId(tripState);
+
+    final routeAsync = coords != null
+        ? ref.watch(
+            tripRouteProvider(
+              startLat: coords.originLat,
+              startLng: coords.originLng,
+              endLat: coords.destLat,
+              endLng: coords.destLng,
+            ),
+          )
+        : null;
 
     return Stack(
       children: [
-        routeAsync.when(
-          data: (route) => _TrackingMap(route: route, driverId: driverId),
-          loading: () => NaverMap(
-            options: NaverMapViewOptions(
-              initialCameraPosition: NCameraPosition(
-                target: const NLatLng(_kPickupLat, _kPickupLng),
-                zoom: 15,
-              ),
-            ),
-          ),
-          error: (_, _) => NaverMap(
-            options: NaverMapViewOptions(
-              initialCameraPosition: NCameraPosition(
-                target: const NLatLng(_kPickupLat, _kPickupLng),
-                zoom: 15,
-              ),
-            ),
-          ),
-        ),
+        if (routeAsync != null)
+          routeAsync.when(
+            data: (route) => _TrackingMap(route: route, driverId: driverId),
+            loading: () => _defaultMap(coords),
+            error: (_, _) => _defaultMap(coords),
+          )
+        else
+          _defaultMap(null),
         Positioned(
           left: 16,
           right: 16,
@@ -155,6 +161,62 @@ class _TripTrackingView extends ConsumerWidget {
     );
   }
 
+  static Widget _defaultMap(_TripCoords? coords) {
+    final lat = coords?.originLat ?? _kDefaultOriginLat;
+    final lng = coords?.originLng ?? _kDefaultOriginLng;
+    return NaverMap(
+      options: NaverMapViewOptions(initialCameraPosition: NCameraPosition(target: NLatLng(lat, lng), zoom: 15)),
+    );
+  }
+
+  static _TripCoords? _extractCoords(TripState? state) {
+    return switch (state) {
+      TripDispatchProposed(:final originLat, :final originLng, :final destLat, :final destLng) => _TripCoords(
+        originLat: originLat,
+        originLng: originLng,
+        destLat: destLat,
+        destLng: destLng,
+      ),
+      TripAccepted(:final originLat, :final originLng, :final destLat, :final destLng) => _TripCoords(
+        originLat: originLat,
+        originLng: originLng,
+        destLat: destLat,
+        destLng: destLng,
+      ),
+      TripNavigatingToPickup(:final originLat, :final originLng, :final destLat, :final destLng) => _TripCoords(
+        originLat: originLat,
+        originLng: originLng,
+        destLat: destLat,
+        destLng: destLng,
+      ),
+      TripArrivedAtPickup(:final originLat, :final originLng, :final destLat, :final destLng) => _TripCoords(
+        originLat: originLat,
+        originLng: originLng,
+        destLat: destLat,
+        destLng: destLng,
+      ),
+      TripPassengerPickedUp(:final originLat, :final originLng, :final destLat, :final destLng) => _TripCoords(
+        originLat: originLat,
+        originLng: originLng,
+        destLat: destLat,
+        destLng: destLng,
+      ),
+      TripNavigatingToDestination(:final originLat, :final originLng, :final destLat, :final destLng) => _TripCoords(
+        originLat: originLat,
+        originLng: originLng,
+        destLat: destLat,
+        destLng: destLng,
+      ),
+      TripCompleted(:final originLat, :final originLng, :final destLat, :final destLng) => _TripCoords(
+        originLat: originLat,
+        originLng: originLng,
+        destLat: destLat,
+        destLng: destLng,
+      ),
+      _ => null,
+    };
+  }
+
   static String? _extractDriverId(TripState? state) {
     return switch (state) {
       TripAccepted(:final driverId) => driverId,
@@ -166,6 +228,14 @@ class _TripTrackingView extends ConsumerWidget {
       _ => null,
     };
   }
+}
+
+class _TripCoords {
+  const _TripCoords({required this.originLat, required this.originLng, required this.destLat, required this.destLng});
+  final double originLat;
+  final double originLng;
+  final double destLat;
+  final double destLng;
 }
 
 class _TrackingMap extends ConsumerStatefulWidget {
@@ -203,7 +273,7 @@ class _TrackingMapState extends ConsumerState<_TrackingMap> {
       return NaverMap(
         options: NaverMapViewOptions(
           initialCameraPosition: NCameraPosition(
-            target: const NLatLng(_kPickupLat, _kPickupLng),
+            target: const NLatLng(_kDefaultOriginLat, _kDefaultOriginLng),
             zoom: 15,
           ),
         ),
@@ -214,18 +284,11 @@ class _TrackingMapState extends ConsumerState<_TrackingMap> {
     final pathCoords = coords.map((c) => NLatLng(c.lat, c.lng)).toList();
 
     return NaverMap(
-      options: NaverMapViewOptions(
-        initialCameraPosition: NCameraPosition(target: pathCoords.first, zoom: 13),
-      ),
+      options: NaverMapViewOptions(initialCameraPosition: NCameraPosition(target: pathCoords.first, zoom: 13)),
       onMapReady: (controller) {
         _controller = controller;
 
-        controller.addOverlay(NPathOverlay(
-          id: 'route',
-          coords: pathCoords,
-          color: Colors.blue,
-          width: 4,
-        ));
+        controller.addOverlay(NPathOverlay(id: 'route', coords: pathCoords, color: Theme.of(context).colorScheme.primary, width: 4));
 
         final pickupMarker = NMarker(id: 'pickup', position: pathCoords.first);
         pickupMarker.setCaption(const NOverlayCaption(text: '출발'));
@@ -236,9 +299,7 @@ class _TrackingMapState extends ConsumerState<_TrackingMap> {
         controller.addOverlay(destMarker);
 
         final bounds = NLatLngBounds.from(pathCoords);
-        controller.updateCamera(
-          NCameraUpdate.fitBounds(bounds, padding: const EdgeInsets.all(48)),
-        );
+        controller.updateCamera(NCameraUpdate.fitBounds(bounds, padding: const EdgeInsets.all(48)));
       },
     );
   }
@@ -264,11 +325,9 @@ class _StatusCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(_statusIcon(state), size: 20, color: _statusColor(state)),
+                Icon(_statusIcon(state), size: 20, color: _statusColor(context, state)),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: Text(_statusLabel(state), style: Theme.of(context).textTheme.titleMedium),
-                ),
+                Expanded(child: Text(_statusLabel(state), style: Theme.of(context).textTheme.titleMedium)),
               ],
             ),
             if (state is TripDispatchProposed) ...[
@@ -320,14 +379,15 @@ class _StatusCard extends StatelessWidget {
     };
   }
 
-  static Color _statusColor(TripState state) {
+  static Color _statusColor(BuildContext context, TripState state) {
+    final cs = Theme.of(context).colorScheme;
     return switch (state) {
-      TripDispatchProposed() => Colors.orange,
-      TripAccepted() || TripNavigatingToPickup() || TripArrivedAtPickup() => Colors.blue,
-      TripPassengerPickedUp() || TripNavigatingToDestination() => Colors.green,
-      TripCompleted() => Colors.green,
-      TripCancelled() || TripFailed() => Colors.red,
-      _ => Colors.grey,
+      TripDispatchProposed() => cs.tertiary,
+      TripAccepted() || TripNavigatingToPickup() || TripArrivedAtPickup() => cs.primary,
+      TripPassengerPickedUp() || TripNavigatingToDestination() => cs.primary,
+      TripCompleted() => cs.primary,
+      TripCancelled() || TripFailed() => cs.error,
+      _ => cs.outline,
     };
   }
 }

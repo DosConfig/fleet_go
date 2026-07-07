@@ -8,22 +8,45 @@ sealed class TripState with _$TripState {
   const factory TripState.idle() = TripIdle;
 
   /// 배차 제안됨. 시스템이 드라이버에게 배차를 제안한 상태.
-  const factory TripState.dispatchProposed({required String tripId, required DateTime proposedAt}) =
-      TripDispatchProposed;
+  const factory TripState.dispatchProposed({
+    required String tripId,
+    required DateTime proposedAt,
+    required double originLat,
+    required double originLng,
+    required double destLat,
+    required double destLng,
+  }) = TripDispatchProposed;
 
   /// 배차 수락됨. 드라이버가 수락.
-  const factory TripState.accepted({required String tripId, required String driverId, required DateTime acceptedAt}) =
-      TripAccepted;
+  const factory TripState.accepted({
+    required String tripId,
+    required String driverId,
+    required DateTime acceptedAt,
+    required double originLat,
+    required double originLng,
+    required double destLat,
+    required double destLng,
+  }) = TripAccepted;
 
   /// 픽업지로 이동 중.
-  const factory TripState.navigatingToPickup({required String tripId, required String driverId}) =
-      TripNavigatingToPickup;
+  const factory TripState.navigatingToPickup({
+    required String tripId,
+    required String driverId,
+    required double originLat,
+    required double originLng,
+    required double destLat,
+    required double destLng,
+  }) = TripNavigatingToPickup;
 
   /// 픽업지 도착.
   const factory TripState.arrivedAtPickup({
     required String tripId,
     required String driverId,
     required DateTime arrivedAt,
+    required double originLat,
+    required double originLng,
+    required double destLat,
+    required double destLng,
   }) = TripArrivedAtPickup;
 
   /// 승객 탑승 완료.
@@ -31,15 +54,32 @@ sealed class TripState with _$TripState {
     required String tripId,
     required String driverId,
     required DateTime pickedUpAt,
+    required double originLat,
+    required double originLng,
+    required double destLat,
+    required double destLng,
   }) = TripPassengerPickedUp;
 
   /// 목적지로 이동 중.
-  const factory TripState.navigatingToDestination({required String tripId, required String driverId}) =
-      TripNavigatingToDestination;
+  const factory TripState.navigatingToDestination({
+    required String tripId,
+    required String driverId,
+    required double originLat,
+    required double originLng,
+    required double destLat,
+    required double destLng,
+  }) = TripNavigatingToDestination;
 
   /// 운행 완료. 터미널 상태.
-  const factory TripState.completed({required String tripId, required String driverId, required DateTime completedAt}) =
-      TripCompleted;
+  const factory TripState.completed({
+    required String tripId,
+    required String driverId,
+    required DateTime completedAt,
+    required double originLat,
+    required double originLng,
+    required double destLat,
+    required double destLng,
+  }) = TripCompleted;
 
   /// 취소됨. 터미널 상태.
   const factory TripState.cancelled({

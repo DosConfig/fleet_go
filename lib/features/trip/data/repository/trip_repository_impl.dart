@@ -48,28 +48,62 @@ class TripRepositoryImpl implements TripRepository {
       'dispatchProposed' => TripState.dispatchProposed(
         tripId: dto.tripId,
         proposedAt: dto.proposedAt ?? DateTime.now(),
+        originLat: dto.originLat ?? 0,
+        originLng: dto.originLng ?? 0,
+        destLat: dto.destLat ?? 0,
+        destLng: dto.destLng ?? 0,
       ),
       'accepted' => TripState.accepted(
         tripId: dto.tripId,
         driverId: dto.driverId ?? '',
         acceptedAt: dto.acceptedAt ?? DateTime.now(),
+        originLat: dto.originLat ?? 0,
+        originLng: dto.originLng ?? 0,
+        destLat: dto.destLat ?? 0,
+        destLng: dto.destLng ?? 0,
       ),
-      'navigatingToPickup' => TripState.navigatingToPickup(tripId: dto.tripId, driverId: dto.driverId ?? ''),
+      'navigatingToPickup' => TripState.navigatingToPickup(
+        tripId: dto.tripId,
+        driverId: dto.driverId ?? '',
+        originLat: dto.originLat ?? 0,
+        originLng: dto.originLng ?? 0,
+        destLat: dto.destLat ?? 0,
+        destLng: dto.destLng ?? 0,
+      ),
       'arrivedAtPickup' => TripState.arrivedAtPickup(
         tripId: dto.tripId,
         driverId: dto.driverId ?? '',
         arrivedAt: dto.arrivedAt ?? DateTime.now(),
+        originLat: dto.originLat ?? 0,
+        originLng: dto.originLng ?? 0,
+        destLat: dto.destLat ?? 0,
+        destLng: dto.destLng ?? 0,
       ),
       'passengerPickedUp' => TripState.passengerPickedUp(
         tripId: dto.tripId,
         driverId: dto.driverId ?? '',
         pickedUpAt: dto.pickedUpAt ?? DateTime.now(),
+        originLat: dto.originLat ?? 0,
+        originLng: dto.originLng ?? 0,
+        destLat: dto.destLat ?? 0,
+        destLng: dto.destLng ?? 0,
       ),
-      'navigatingToDestination' => TripState.navigatingToDestination(tripId: dto.tripId, driverId: dto.driverId ?? ''),
+      'navigatingToDestination' => TripState.navigatingToDestination(
+        tripId: dto.tripId,
+        driverId: dto.driverId ?? '',
+        originLat: dto.originLat ?? 0,
+        originLng: dto.originLng ?? 0,
+        destLat: dto.destLat ?? 0,
+        destLng: dto.destLng ?? 0,
+      ),
       'completed' => TripState.completed(
         tripId: dto.tripId,
         driverId: dto.driverId ?? '',
         completedAt: dto.completedAt ?? DateTime.now(),
+        originLat: dto.originLat ?? 0,
+        originLng: dto.originLng ?? 0,
+        destLat: dto.destLat ?? 0,
+        destLng: dto.destLng ?? 0,
       ),
       'cancelled' => TripState.cancelled(
         tripId: dto.tripId,
@@ -87,48 +121,130 @@ class TripRepositoryImpl implements TripRepository {
   }
 
   TripDto _toDto(String tripId, TripState state) {
-    if (state is TripIdle) {
-      return TripDto(tripId: tripId, status: 'idle');
-    }
-    if (state is TripDispatchProposed) {
-      return TripDto(tripId: tripId, status: 'dispatchProposed', proposedAt: state.proposedAt);
-    }
-    if (state is TripAccepted) {
-      return TripDto(tripId: tripId, status: 'accepted', driverId: state.driverId, acceptedAt: state.acceptedAt);
-    }
-    if (state is TripNavigatingToPickup) {
-      return TripDto(tripId: tripId, status: 'navigatingToPickup', driverId: state.driverId);
-    }
-    if (state is TripArrivedAtPickup) {
-      return TripDto(tripId: tripId, status: 'arrivedAtPickup', driverId: state.driverId, arrivedAt: state.arrivedAt);
-    }
-    if (state is TripPassengerPickedUp) {
-      return TripDto(
-        tripId: tripId,
-        status: 'passengerPickedUp',
-        driverId: state.driverId,
-        pickedUpAt: state.pickedUpAt,
-      );
-    }
-    if (state is TripNavigatingToDestination) {
-      return TripDto(tripId: tripId, status: 'navigatingToDestination', driverId: state.driverId);
-    }
-    if (state is TripCompleted) {
-      return TripDto(tripId: tripId, status: 'completed', driverId: state.driverId, completedAt: state.completedAt);
-    }
-    if (state is TripCancelled) {
-      return TripDto(
+    return switch (state) {
+      TripIdle() => TripDto(tripId: tripId, status: 'idle'),
+      TripDispatchProposed(:final proposedAt, :final originLat, :final originLng, :final destLat, :final destLng) =>
+        TripDto(
+          tripId: tripId,
+          status: 'dispatchProposed',
+          proposedAt: proposedAt,
+          originLat: originLat,
+          originLng: originLng,
+          destLat: destLat,
+          destLng: destLng,
+        ),
+      TripAccepted(
+        :final driverId,
+        :final acceptedAt,
+        :final originLat,
+        :final originLng,
+        :final destLat,
+        :final destLng,
+      ) =>
+        TripDto(
+          tripId: tripId,
+          status: 'accepted',
+          driverId: driverId,
+          acceptedAt: acceptedAt,
+          originLat: originLat,
+          originLng: originLng,
+          destLat: destLat,
+          destLng: destLng,
+        ),
+      TripNavigatingToPickup(:final driverId, :final originLat, :final originLng, :final destLat, :final destLng) =>
+        TripDto(
+          tripId: tripId,
+          status: 'navigatingToPickup',
+          driverId: driverId,
+          originLat: originLat,
+          originLng: originLng,
+          destLat: destLat,
+          destLng: destLng,
+        ),
+      TripArrivedAtPickup(
+        :final driverId,
+        :final arrivedAt,
+        :final originLat,
+        :final originLng,
+        :final destLat,
+        :final destLng,
+      ) =>
+        TripDto(
+          tripId: tripId,
+          status: 'arrivedAtPickup',
+          driverId: driverId,
+          arrivedAt: arrivedAt,
+          originLat: originLat,
+          originLng: originLng,
+          destLat: destLat,
+          destLng: destLng,
+        ),
+      TripPassengerPickedUp(
+        :final driverId,
+        :final pickedUpAt,
+        :final originLat,
+        :final originLng,
+        :final destLat,
+        :final destLng,
+      ) =>
+        TripDto(
+          tripId: tripId,
+          status: 'passengerPickedUp',
+          driverId: driverId,
+          pickedUpAt: pickedUpAt,
+          originLat: originLat,
+          originLng: originLng,
+          destLat: destLat,
+          destLng: destLng,
+        ),
+      TripNavigatingToDestination(
+        :final driverId,
+        :final originLat,
+        :final originLng,
+        :final destLat,
+        :final destLng,
+      ) =>
+        TripDto(
+          tripId: tripId,
+          status: 'navigatingToDestination',
+          driverId: driverId,
+          originLat: originLat,
+          originLng: originLng,
+          destLat: destLat,
+          destLng: destLng,
+        ),
+      TripCompleted(
+        :final driverId,
+        :final completedAt,
+        :final originLat,
+        :final originLng,
+        :final destLat,
+        :final destLng,
+      ) =>
+        TripDto(
+          tripId: tripId,
+          status: 'completed',
+          driverId: driverId,
+          completedAt: completedAt,
+          originLat: originLat,
+          originLng: originLng,
+          destLat: destLat,
+          destLng: destLng,
+        ),
+      TripCancelled(:final cancelledBy, :final reason, :final cancelledAt) => TripDto(
         tripId: tripId,
         status: 'cancelled',
-        cancelledBy: state.cancelledBy,
-        cancelReason: state.reason,
-        cancelledAt: state.cancelledAt,
-      );
-    }
-    if (state is TripFailed) {
-      return TripDto(tripId: tripId, status: 'failed', errorCode: state.errorCode, failedAt: state.failedAt);
-    }
-    return TripDto(tripId: tripId, status: 'idle');
+        cancelledBy: cancelledBy,
+        cancelReason: reason,
+        cancelledAt: cancelledAt,
+      ),
+      TripFailed(:final errorCode, :final failedAt) => TripDto(
+        tripId: tripId,
+        status: 'failed',
+        errorCode: errorCode,
+        failedAt: failedAt,
+      ),
+    };
   }
 
   @override
