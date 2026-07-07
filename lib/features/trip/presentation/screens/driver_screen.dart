@@ -19,7 +19,10 @@ class DriverScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('드라이버')),
       body: activeTripId == null
           ? _ProposedList(onAccept: (tripId) => _acceptTrip(ref, context, tripId))
-          : _ActiveTripView(tripId: activeTripId, onBack: () => ref.read(driverTripIdProvider.notifier).set(null)),
+          : _ActiveTripView(tripId: activeTripId, onBack: () {
+              ref.read(driverLocationSenderProvider.notifier).stop();
+              ref.read(driverTripIdProvider.notifier).set(null);
+            }),
     );
   }
 
@@ -30,6 +33,7 @@ class DriverScreen extends ConsumerWidget {
     try {
       await ref.read(acceptTripProvider).call(tripId: tripId, driverId: driverId);
       ref.read(driverTripIdProvider.notifier).set(tripId);
+      ref.read(driverLocationSenderProvider.notifier).start(driverId);
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('수락 실패: $e')));
@@ -123,7 +127,7 @@ class _ActiveTripContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 하드코딩 좌표 — TripState에 좌표 추가 후 교체
+    // TODO: 하드코딩 좌표 — TripState에 좌표 추가 후 교체
     final routeAsync = ref.watch(tripRouteProvider(
       startLat: 37.4979,
       startLng: 127.0276,

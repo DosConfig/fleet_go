@@ -1,3 +1,4 @@
+import 'package:fleet_go/core/di/location_providers.dart';
 import 'package:fleet_go/core/di/trip_providers.dart';
 import 'package:fleet_go/features/route/domain/entity/route_info.dart';
 import 'package:fleet_go/features/route/presentation/providers/route_state_provider.dart';
@@ -7,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// 하드코딩 좌표 — TripState에 좌표 추가 후 교체
+// TODO: 하드코딩 좌표 — TripState에 좌표 추가 후 교체
 const _kPickupLat = 37.4979;
 const _kPickupLng = 127.0276;
 const _kDestLat = 37.5547;
@@ -111,10 +112,12 @@ class _TripTrackingView extends ConsumerWidget {
       endLng: _kDestLng,
     ));
 
+    final driverId = _extractDriverId(tripAsync.value);
+
     return Stack(
       children: [
         routeAsync.when(
-          data: (route) => _TrackingMap(route: route),
+          data: (route) => _TrackingMap(route: route, driverId: driverId),
           loading: () => NaverMap(
             options: NaverMapViewOptions(
               initialCameraPosition: NCameraPosition(
@@ -151,15 +154,32 @@ class _TripTrackingView extends ConsumerWidget {
       ],
     );
   }
+
+  static String? _extractDriverId(TripState? state) {
+    return switch (state) {
+      TripAccepted(:final driverId) => driverId,
+      TripNavigatingToPickup(:final driverId) => driverId,
+      TripArrivedAtPickup(:final driverId) => driverId,
+      TripPassengerPickedUp(:final driverId) => driverId,
+      TripNavigatingToDestination(:final driverId) => driverId,
+      TripCompleted(:final driverId) => driverId,
+      _ => null,
+    };
+  }
 }
 
-class _TrackingMap extends StatelessWidget {
-  const _TrackingMap({required this.route});
+class _TrackingMap extends ConsumerWidget {
+  const _TrackingMap({required this.route, this.driverId});
   final RouteInfo route;
+  final String? driverId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final coords = route.coordinates;
+    final driverLocation = driverId != null
+        ? ref.watch(watchDriverLocationStreamProvider(driverId!)).value
+        : null;
+
     if (coords.isEmpty) {
       return NaverMap(
         options: NaverMapViewOptions(
@@ -192,6 +212,15 @@ class _TrackingMap extends StatelessWidget {
         final destMarker = NMarker(id: 'destination', position: pathCoords.last);
         destMarker.setCaption(const NOverlayCaption(text: '도착'));
         controller.addOverlay(destMarker);
+
+        if (driverLocation != null) {
+          final driverMarker = NMarker(
+            id: 'driver',
+            position: NLatLng(driverLocation.lat, driverLocation.lng),
+          );
+          driverMarker.setCaption(const NOverlayCaption(text: '드라이버'));
+          controller.addOverlay(driverMarker);
+        }
 
         final bounds = NLatLngBounds.from(pathCoords);
         controller.updateCamera(
