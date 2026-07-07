@@ -1,9 +1,12 @@
 import 'package:fleet_go/core/di/auth_providers.dart';
 import 'package:fleet_go/core/di/trip_providers.dart';
+import 'package:fleet_go/features/route/domain/entity/route_info.dart';
 import 'package:fleet_go/features/trip/domain/entity/trip_event.dart';
 import 'package:fleet_go/features/trip/domain/entity/trip_state.dart';
 import 'package:fleet_go/features/trip/presentation/providers/driver_providers.dart';
+import 'package:fleet_go/features/route/presentation/providers/route_state_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class DriverScreen extends ConsumerWidget {
@@ -108,7 +111,7 @@ class _ActiveTripView extends ConsumerWidget {
   }
 }
 
-class _ActiveTripContent extends StatelessWidget {
+class _ActiveTripContent extends ConsumerWidget {
   const _ActiveTripContent({required this.tripId, required this.state, required this.onBack, required this.onAdvance});
 
   final String tripId;
@@ -119,22 +122,32 @@ class _ActiveTripContent extends StatelessWidget {
   bool get _isTerminal => state is TripCompleted || state is TripCancelled || state is TripFailed;
 
   @override
-  Widget build(BuildContext context) {
-    final nextEvent = _nextEvent(state);
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 하드코딩 좌표 — TripState에 좌표 추가 후 교체
+    final routeAsync = ref.watch(tripRouteProvider(
+      startLat: 37.4979,
+      startLng: 127.0276,
+      endLat: 37.5547,
+      endLng: 126.9707,
+    ));
 
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(_statusLabel(state), style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 8),
-          Text('Trip ID: $tripId', style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 24),
-          if (nextEvent != null)
-            FilledButton(onPressed: () => onAdvance(nextEvent), child: Text(_eventLabel(nextEvent))),
-          if (_isTerminal) FilledButton(onPressed: onBack, child: const Text('배차 목록으로')),
-        ],
-      ),
+    return Column(
+      children: [
+        Expanded(
+          child: routeAsync.when(
+            data: (route) => _RouteMap(route: route),
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Center(child: Text('경로 조회 실패: $e')),
+          ),
+        ),
+        _TripControlPanel(
+          state: state,
+          tripId: tripId,
+          isTerminal: _isTerminal,
+          onAdvance: onAdvance,
+          onBack: onBack,
+        ),
+      ],
     );
   }
 
@@ -173,5 +186,93 @@ class _ActiveTripContent extends StatelessWidget {
       TripEvent.complete => '운행 완료',
       _ => event.name,
     };
+  }
+}
+
+class _RouteMap extends StatelessWidget {
+  const _RouteMap({required this.route});
+  final RouteInfo route;
+
+  @override
+  Widget build(BuildContext context) {
+    final coords = route.coordinates;
+    if (coords.isEmpty) return const Center(child: Text('경로 없음'));
+
+    final pathCoords = coords.map((c) => NLatLng(c.lat, c.lng)).toList();
+    final center = pathCoords[pathCoords.length ~/ 2];
+
+    return NaverMap(
+      options: NaverMapViewOptions(
+        initialCameraPosition: NCameraPosition(target: center, zoom: 13),
+      ),
+      onMapReady: (controller) {
+        final path = NPathOverlay(
+          id: 'route',
+          coords: pathCoords,
+          color: Colors.blue,
+          width: 4,
+        );
+        controller.addOverlay(path);
+
+        final bounds = NLatLngBounds.from(pathCoords);
+        controller.updateCamera(
+          NCameraUpdate.fitBounds(bounds, padding: const EdgeInsets.all(48)),
+        );
+      },
+    );
+  }
+}
+
+class _TripControlPanel extends StatelessWidget {
+  const _TripControlPanel({
+    required this.state,
+    required this.tripId,
+    required this.isTerminal,
+    required this.onAdvance,
+    required this.onBack,
+  });
+
+  final TripState state;
+  final String tripId;
+  final bool isTerminal;
+  final void Function(TripEvent event) onAdvance;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final nextEvent = _ActiveTripContent._nextEvent(state);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 8, offset: const Offset(0, -2))],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_ActiveTripContent._statusLabel(state), style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text('Trip ID: $tripId', style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 12),
+            if (nextEvent != null)
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => onAdvance(nextEvent),
+                  child: Text(_ActiveTripContent._eventLabel(nextEvent)),
+                ),
+              ),
+            if (isTerminal)
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(onPressed: onBack, child: const Text('배차 목록으로')),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }
