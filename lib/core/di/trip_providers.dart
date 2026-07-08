@@ -48,6 +48,11 @@ Stream<(String, TripState)?> watchActiveTrip(Ref ref, String passengerId) {
 }
 
 @riverpod
+Stream<(String, TripState)?> watchActiveDriverTrip(Ref ref, String driverId) {
+  return ref.watch(tripRepositoryProvider).watchActiveDriverTrip(driverId);
+}
+
+@riverpod
 Stream<TripState?> watchTrip(Ref ref, String tripId) {
   final repo = ref.watch(tripRepositoryProvider);
   return repo.watchTrip(tripId);

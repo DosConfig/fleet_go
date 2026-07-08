@@ -4,8 +4,10 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../features/auth/data/repository/auth_repository_impl.dart';
 import '../../features/auth/domain/entity/app_user.dart';
 import '../../features/auth/domain/repository/auth_repository.dart';
+import '../../features/auth/domain/usecase/sign_in_with_email.dart';
 import '../../features/auth/domain/usecase/sign_in_with_google.dart';
 import '../../features/auth/domain/usecase/sign_out.dart';
+import '../../features/auth/domain/usecase/sign_up_with_email.dart';
 
 part 'auth_providers.g.dart';
 
@@ -22,6 +24,16 @@ Stream<AppUser?> authState(Ref ref) {
 @riverpod
 SignInWithGoogle signInWithGoogle(Ref ref) {
   return SignInWithGoogle(ref.watch(authRepositoryProvider));
+}
+
+@riverpod
+SignInWithEmail signInWithEmail(Ref ref) {
+  return SignInWithEmail(ref.watch(authRepositoryProvider));
+}
+
+@riverpod
+SignUpWithEmail signUpWithEmail(Ref ref) {
+  return SignUpWithEmail(ref.watch(authRepositoryProvider));
 }
 
 @riverpod

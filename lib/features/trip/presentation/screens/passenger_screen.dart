@@ -5,6 +5,7 @@ import 'package:fleet_go/features/route/domain/entity/route_info.dart';
 import 'package:fleet_go/features/route/presentation/providers/route_state_provider.dart';
 import 'package:fleet_go/features/trip/domain/entity/trip_state.dart';
 import 'package:fleet_go/features/trip/presentation/providers/passenger_providers.dart';
+import 'package:fleet_go/features/trip/presentation/trip_ui_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,21 +27,28 @@ class PassengerScreen extends ConsumerWidget {
     }
 
     final activeTripAsync = ref.watch(watchActiveTripProvider(user.uid));
-    final activeTrip = activeTripAsync.value;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('승객'),
-        leading: activeTrip != null
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => _cancelAndGoBack(ref, context, activeTrip.$1, user.uid),
-              )
-            : null,
-      ),
-      body: activeTrip == null
-          ? _CallView(onCall: () => _requestTrip(ref, context, user.uid))
-          : _TripTrackingView(tripId: activeTrip.$1, state: activeTrip.$2),
+    return activeTripAsync.when(
+      data: (activeTrip) {
+        final activeTripId = activeTrip?.$1;
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('승객'),
+            leading: activeTripId != null
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => _cancelTrip(ref, context, activeTripId, user.uid),
+                  )
+                : null,
+          ),
+          body: activeTripId == null
+              ? _CallView(onCall: () => _requestTrip(ref, context, user.uid))
+              : _TripTrackingView(tripId: activeTripId),
+        );
+      },
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (e, _) => Scaffold(body: Center(child: Text('오류: $e'))),
     );
   }
 
@@ -67,13 +75,11 @@ class PassengerScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _cancelAndGoBack(WidgetRef ref, BuildContext context, String tripId, String passengerId) async {
+  Future<void> _cancelTrip(WidgetRef ref, BuildContext context, String tripId, String passengerId) async {
     try {
       await ref.read(cancelTripProvider).call(tripId: tripId, cancelledBy: passengerId, reason: '승객 취소');
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('취소 실패: $e')));
-      }
+    } catch (_) {
+      // cancel 실패(이미 terminal 등)해도 watchActiveTrip이 terminal 필터링 → 자동 복귀
     }
   }
 }
@@ -130,23 +136,28 @@ class _CallView extends ConsumerWidget {
 }
 
 class _TripTrackingView extends ConsumerWidget {
-  const _TripTrackingView({required this.tripId, required this.state});
+  const _TripTrackingView({required this.tripId});
 
   final String tripId;
-  final TripState state;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final coords = _extractCoords(state);
-    final driverId = _extractDriverId(state);
+    final tripAsync = ref.watch(watchTripProvider(tripId));
+    final state = tripAsync.value;
+    if (state == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final coords = extractTripCoords(state);
+    final driverId = extractDriverId(state);
 
     final routeAsync = coords != null
         ? ref.watch(
             tripRouteProvider(
-              startLat: coords.originLat,
-              startLng: coords.originLng,
-              endLat: coords.destLat,
-              endLng: coords.destLng,
+              startLat: coords.$1,
+              startLng: coords.$2,
+              endLat: coords.$3,
+              endLng: coords.$4,
             ),
           )
         : null;
@@ -167,53 +178,20 @@ class _TripTrackingView extends ConsumerWidget {
           bottom: 32,
           child: SafeArea(
             top: false,
-            child: _StatusCard(state: state, tripId: tripId),
+            child: _StatusCard(state: state),
           ),
         ),
       ],
     );
   }
 
-  static Widget _defaultMap(_TripCoords? coords) {
-    final lat = coords?.originLat ?? _kDefaultOriginLat;
-    final lng = coords?.originLng ?? _kDefaultOriginLng;
+  static Widget _defaultMap((double, double, double, double)? coords) {
+    final lat = coords?.$1 ?? _kDefaultOriginLat;
+    final lng = coords?.$2 ?? _kDefaultOriginLng;
     return NaverMap(
       options: NaverMapViewOptions(initialCameraPosition: NCameraPosition(target: NLatLng(lat, lng), zoom: 15)),
     );
   }
-
-  static _TripCoords? _extractCoords(TripState state) {
-    return switch (state) {
-      final TripDispatchProposed s => _TripCoords(originLat: s.originLat, originLng: s.originLng, destLat: s.destLat, destLng: s.destLng),
-      final TripAccepted s => _TripCoords(originLat: s.originLat, originLng: s.originLng, destLat: s.destLat, destLng: s.destLng),
-      final TripNavigatingToPickup s => _TripCoords(originLat: s.originLat, originLng: s.originLng, destLat: s.destLat, destLng: s.destLng),
-      final TripArrivedAtPickup s => _TripCoords(originLat: s.originLat, originLng: s.originLng, destLat: s.destLat, destLng: s.destLng),
-      final TripPassengerPickedUp s => _TripCoords(originLat: s.originLat, originLng: s.originLng, destLat: s.destLat, destLng: s.destLng),
-      final TripNavigatingToDestination s => _TripCoords(originLat: s.originLat, originLng: s.originLng, destLat: s.destLat, destLng: s.destLng),
-      final TripCompleted s => _TripCoords(originLat: s.originLat, originLng: s.originLng, destLat: s.destLat, destLng: s.destLng),
-      _ => null,
-    };
-  }
-
-  static String? _extractDriverId(TripState state) {
-    return switch (state) {
-      final TripAccepted s => s.driverId,
-      final TripNavigatingToPickup s => s.driverId,
-      final TripArrivedAtPickup s => s.driverId,
-      final TripPassengerPickedUp s => s.driverId,
-      final TripNavigatingToDestination s => s.driverId,
-      final TripCompleted s => s.driverId,
-      _ => null,
-    };
-  }
-}
-
-class _TripCoords {
-  const _TripCoords({required this.originLat, required this.originLng, required this.destLat, required this.destLng});
-  final double originLat;
-  final double originLng;
-  final double destLat;
-  final double destLng;
 }
 
 class _TrackingMap extends ConsumerStatefulWidget {
@@ -284,12 +262,9 @@ class _TrackingMapState extends ConsumerState<_TrackingMap> {
 }
 
 class _StatusCard extends StatelessWidget {
-  const _StatusCard({required this.state, required this.tripId});
+  const _StatusCard({required this.state});
 
   final TripState state;
-  final String tripId;
-
-  bool get _isTerminal => state is TripCompleted || state is TripCancelled || state is TripFailed;
 
   @override
   Widget build(BuildContext context) {
@@ -312,13 +287,6 @@ class _StatusCard extends StatelessWidget {
               const LinearProgressIndicator(),
               const SizedBox(height: 8),
               Text('드라이버를 찾고 있습니다', style: Theme.of(context).textTheme.bodySmall),
-            ],
-            if (_isTerminal) ...[
-              const SizedBox(height: 12),
-              Text(
-                state is TripCompleted ? '운행이 완료되었습니다' : '운행이 종료되었습니다',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
             ],
           ],
         ),
@@ -368,4 +336,3 @@ class _StatusCard extends StatelessWidget {
     };
   }
 }
-

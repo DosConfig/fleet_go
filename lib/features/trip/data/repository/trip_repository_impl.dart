@@ -219,11 +219,18 @@ class TripRepositoryImpl implements TripRepository {
 
   @override
   Stream<(String, TripState)?> watchActiveTrip(String passengerId) {
-    // 비종료 상태인 trip 중 passengerId가 일치하는 것을 조회
-    // Firestore는 != 쿼리를 직접 지원하지 않으므로,
-    // passengerId로 필터 후 클라이언트에서 종료 상태 제외
+    return _watchActiveBy('passengerId', passengerId);
+  }
+
+  @override
+  Stream<(String, TripState)?> watchActiveDriverTrip(String driverId) {
+    return _watchActiveBy('driverId', driverId);
+  }
+
+  /// 특정 필드로 비종료 상태 trip을 실시간 조회하는 공용 헬퍼.
+  Stream<(String, TripState)?> _watchActiveBy(String field, String value) {
     return _collection
-        .where('passengerId', isEqualTo: passengerId)
+        .where(field, isEqualTo: value)
         .snapshots()
         .map((snapshot) {
       final activeDocs = snapshot.docs.where((doc) {
@@ -236,7 +243,6 @@ class TripRepositoryImpl implements TripRepository {
       });
       if (activeDocs.isEmpty) return null;
 
-      // 가장 최근 trip 반환
       final doc = activeDocs.first;
       final dto = TripDto.fromJson(doc.data());
       final entity = _toEntity(dto);
@@ -252,21 +258,38 @@ class TripRepositoryImpl implements TripRepository {
   }) async {
     final docRef = _collection.doc(tripId);
 
+    // 트랜잭션 내부에서 throw하면 cloud_firestore의 completer가
+    // "Future already completed" 에러를 낼 수 있으므로,
+    // 콜백 에러는 트랜잭션 밖에서 처리한다.
+    Object? callbackError;
+
     await _firestore.runTransaction((transaction) async {
       final snapshot = await transaction.get(docRef);
       if (!snapshot.exists) {
-        throw Exception('Trip not found: $tripId');
+        callbackError = Exception('Trip not found: $tripId');
+        return;
       }
 
       final dto = TripDto.fromJson(snapshot.data()!);
       final currentState = _toEntity(dto);
       if (currentState == null) {
-        throw Exception('Invalid trip state in Firestore: ${dto.status}');
+        callbackError = Exception('Invalid trip state in Firestore: ${dto.status}');
+        return;
       }
 
-      final nextState = transition(currentState);
-
-      transaction.set(docRef, _toDto(tripId, nextState).toJson());
+      try {
+        final nextState = transition(currentState);
+        final nextDto = _toDto(tripId, nextState);
+        // passengerId를 모든 상태에서 보존 — watchActiveTrip 쿼리가 끊기지 않도록
+        final preserved = nextDto.passengerId ?? dto.passengerId;
+        transaction.set(docRef, nextDto.copyWith(passengerId: preserved).toJson());
+      } catch (e) {
+        callbackError = e;
+      }
     });
+
+    if (callbackError != null) {
+      throw callbackError!;
+    }
   }
 }

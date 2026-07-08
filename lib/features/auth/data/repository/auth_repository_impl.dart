@@ -36,6 +36,22 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<AppUser> signInWithEmail(String email, String password) async {
+    final userCredential = await _auth.signInWithEmailAndPassword(email: email, password: password);
+    final user = userCredential.user;
+    if (user == null) throw Exception('Firebase user is null');
+    return _toEntity(user);
+  }
+
+  @override
+  Future<AppUser> signUpWithEmail(String email, String password) async {
+    final userCredential = await _auth.createUserWithEmailAndPassword(email: email, password: password);
+    final user = userCredential.user;
+    if (user == null) throw Exception('Firebase user is null');
+    return _toEntity(user);
+  }
+
+  @override
   Future<void> signOut() async {
     await _googleSignIn.signOut();
     await _auth.signOut();

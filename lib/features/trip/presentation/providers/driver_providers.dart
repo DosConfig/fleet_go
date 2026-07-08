@@ -6,14 +6,6 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'driver_providers.g.dart';
 
-@riverpod
-class DriverTripId extends _$DriverTripId {
-  @override
-  String? build() => null;
-
-  void set(String? id) => state = id;
-}
-
 /// 드라이버 GPS → RTDB 위치 전송 시작/중지
 @riverpod
 class DriverLocationSender extends _$DriverLocationSender {

@@ -27,6 +27,11 @@ class RouteRepositoryImpl implements RouteRepository {
       },
     );
 
-    return RouteDto.fromJson(response.data as Map<String, dynamic>);
+    final data = response.data;
+    if (data == null || data is! Map<String, dynamic>) {
+      // 디버그: 실제 응답 내용 확인
+      throw Exception('TMAP 응답 타입=${data.runtimeType}, status=${response.statusCode}, body=$data');
+    }
+    return RouteDto.fromJson(data);
   }
 }
