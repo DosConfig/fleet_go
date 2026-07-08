@@ -8,6 +8,7 @@ abstract class TripDto with _$TripDto {
   const factory TripDto({
     required String tripId,
     required String status,
+    String? passengerId,
     String? driverId,
     String? cancelledBy,
     String? cancelReason,

@@ -154,42 +154,12 @@ class _ActiveTripContent extends ConsumerWidget {
 
   static (double, double, double, double)? _extractCoords(TripState state) {
     return switch (state) {
-      TripAccepted(:final originLat, :final originLng, :final destLat, :final destLng) => (
-        originLat,
-        originLng,
-        destLat,
-        destLng,
-      ),
-      TripNavigatingToPickup(:final originLat, :final originLng, :final destLat, :final destLng) => (
-        originLat,
-        originLng,
-        destLat,
-        destLng,
-      ),
-      TripArrivedAtPickup(:final originLat, :final originLng, :final destLat, :final destLng) => (
-        originLat,
-        originLng,
-        destLat,
-        destLng,
-      ),
-      TripPassengerPickedUp(:final originLat, :final originLng, :final destLat, :final destLng) => (
-        originLat,
-        originLng,
-        destLat,
-        destLng,
-      ),
-      TripNavigatingToDestination(:final originLat, :final originLng, :final destLat, :final destLng) => (
-        originLat,
-        originLng,
-        destLat,
-        destLng,
-      ),
-      TripCompleted(:final originLat, :final originLng, :final destLat, :final destLng) => (
-        originLat,
-        originLng,
-        destLat,
-        destLng,
-      ),
+      final TripAccepted s => (s.originLat, s.originLng, s.destLat, s.destLng),
+      final TripNavigatingToPickup s => (s.originLat, s.originLng, s.destLat, s.destLng),
+      final TripArrivedAtPickup s => (s.originLat, s.originLng, s.destLat, s.destLng),
+      final TripPassengerPickedUp s => (s.originLat, s.originLng, s.destLat, s.destLng),
+      final TripNavigatingToDestination s => (s.originLat, s.originLng, s.destLat, s.destLng),
+      final TripCompleted s => (s.originLat, s.originLng, s.destLat, s.destLng),
       _ => null,
     };
   }

@@ -6,6 +6,7 @@ class TripStateMachine {
     TripState current,
     TripEvent event, {
     String? tripId,
+    String? passengerId,
     String? driverId,
     String? cancelledBy,
     String? cancelReason,
@@ -19,9 +20,10 @@ class TripStateMachine {
 
     return switch ((current, event)) {
       (TripIdle _, TripEvent.propose)
-          when tripId != null && originLat != null && originLng != null && destLat != null && destLng != null =>
+          when tripId != null && passengerId != null && originLat != null && originLng != null && destLat != null && destLng != null =>
         TripState.dispatchProposed(
           tripId: tripId,
+          passengerId: passengerId,
           proposedAt: now,
           originLat: originLat,
           originLng: originLng,

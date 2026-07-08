@@ -8,4 +8,8 @@ abstract class TripRepository {
   Stream<List<(String tripId, TripState state)>> watchByStatus(String status);
 
   Future<void> transitionTrip({required String tripId, required TripState Function(TripState current) transition});
+
+  /// 해당 승객의 활성(비종료) trip을 실시간 조회.
+  /// 종료 상태(completed, cancelled, failed)가 아닌 trip 중 가장 최근 것을 반환.
+  Stream<(String tripId, TripState state)?> watchActiveTrip(String passengerId);
 }

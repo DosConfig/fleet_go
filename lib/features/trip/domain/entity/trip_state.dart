@@ -10,6 +10,7 @@ sealed class TripState with _$TripState {
   /// 배차 제안됨. 시스템이 드라이버에게 배차를 제안한 상태.
   const factory TripState.dispatchProposed({
     required String tripId,
+    required String passengerId,
     required DateTime proposedAt,
     required double originLat,
     required double originLng,

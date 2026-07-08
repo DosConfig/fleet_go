@@ -11,6 +11,7 @@ class RequestTrip {
 
   Future<void> call({
     required String tripId,
+    required String passengerId,
     required double originLat,
     required double originLng,
     required double destLat,
@@ -20,6 +21,7 @@ class RequestTrip {
       const TripState.idle(),
       TripEvent.propose,
       tripId: tripId,
+      passengerId: passengerId,
       originLat: originLat,
       originLng: originLng,
       destLat: destLat,

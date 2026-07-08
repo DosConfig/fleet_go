@@ -1,3 +1,4 @@
+import 'package:fleet_go/core/di/auth_providers.dart';
 import 'package:fleet_go/core/di/location_providers.dart';
 import 'package:fleet_go/core/di/trip_providers.dart';
 import 'package:fleet_go/features/route/domain/entity/route_info.dart';
@@ -19,38 +20,60 @@ class PassengerScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tripId = ref.watch(passengerTripIdProvider);
+    final user = ref.watch(authStateProvider).value;
+    if (user == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    final activeTripAsync = ref.watch(watchActiveTripProvider(user.uid));
+    final activeTrip = activeTripAsync.value;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('승객')),
-      body: tripId == null
-          ? _CallView(onCall: () => _requestTrip(ref, context))
-          : _TripTrackingView(tripId: tripId, onReset: () => ref.read(passengerTripIdProvider.notifier).set(null)),
+      appBar: AppBar(
+        title: const Text('승객'),
+        leading: activeTrip != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => _cancelAndGoBack(ref, context, activeTrip.$1, user.uid),
+              )
+            : null,
+      ),
+      body: activeTrip == null
+          ? _CallView(onCall: () => _requestTrip(ref, context, user.uid))
+          : _TripTrackingView(tripId: activeTrip.$1, state: activeTrip.$2),
     );
   }
 
-  Future<void> _requestTrip(WidgetRef ref, BuildContext context) async {
+  Future<void> _requestTrip(WidgetRef ref, BuildContext context, String passengerId) async {
     if (ref.read(passengerLoadingProvider)) return;
     ref.read(passengerLoadingProvider.notifier).set(true);
 
     final tripId = DateTime.now().millisecondsSinceEpoch.toString();
     try {
-      await ref
-          .read(requestTripProvider)
-          .call(
-            tripId: tripId,
-            originLat: _kDefaultOriginLat,
-            originLng: _kDefaultOriginLng,
-            destLat: _kDefaultDestLat,
-            destLng: _kDefaultDestLng,
-          );
-      ref.read(passengerTripIdProvider.notifier).set(tripId);
+      await ref.read(requestTripProvider).call(
+        tripId: tripId,
+        passengerId: passengerId,
+        originLat: _kDefaultOriginLat,
+        originLng: _kDefaultOriginLng,
+        destLat: _kDefaultDestLat,
+        destLng: _kDefaultDestLng,
+      );
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('호출 실패: $e')));
       }
     } finally {
       ref.read(passengerLoadingProvider.notifier).set(false);
+    }
+  }
+
+  Future<void> _cancelAndGoBack(WidgetRef ref, BuildContext context, String tripId, String passengerId) async {
+    try {
+      await ref.read(cancelTripProvider).call(tripId: tripId, cancelledBy: passengerId, reason: '승객 취소');
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('취소 실패: $e')));
+      }
     }
   }
 }
@@ -107,18 +130,15 @@ class _CallView extends ConsumerWidget {
 }
 
 class _TripTrackingView extends ConsumerWidget {
-  const _TripTrackingView({required this.tripId, required this.onReset});
+  const _TripTrackingView({required this.tripId, required this.state});
 
   final String tripId;
-  final VoidCallback onReset;
+  final TripState state;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tripAsync = ref.watch(watchTripProvider(tripId));
-
-    final tripState = tripAsync.value;
-    final coords = _extractCoords(tripState);
-    final driverId = _extractDriverId(tripState);
+    final coords = _extractCoords(state);
+    final driverId = _extractDriverId(state);
 
     final routeAsync = coords != null
         ? ref.watch(
@@ -147,14 +167,7 @@ class _TripTrackingView extends ConsumerWidget {
           bottom: 32,
           child: SafeArea(
             top: false,
-            child: tripAsync.when(
-              data: (state) {
-                if (state == null) return const SizedBox.shrink();
-                return _StatusCard(state: state, tripId: tripId, onReset: onReset);
-              },
-              loading: () => _StatusCardLoading(),
-              error: (e, _) => _StatusCardError(error: e.toString()),
-            ),
+            child: _StatusCard(state: state, tripId: tripId),
           ),
         ),
       ],
@@ -169,62 +182,27 @@ class _TripTrackingView extends ConsumerWidget {
     );
   }
 
-  static _TripCoords? _extractCoords(TripState? state) {
+  static _TripCoords? _extractCoords(TripState state) {
     return switch (state) {
-      TripDispatchProposed(:final originLat, :final originLng, :final destLat, :final destLng) => _TripCoords(
-        originLat: originLat,
-        originLng: originLng,
-        destLat: destLat,
-        destLng: destLng,
-      ),
-      TripAccepted(:final originLat, :final originLng, :final destLat, :final destLng) => _TripCoords(
-        originLat: originLat,
-        originLng: originLng,
-        destLat: destLat,
-        destLng: destLng,
-      ),
-      TripNavigatingToPickup(:final originLat, :final originLng, :final destLat, :final destLng) => _TripCoords(
-        originLat: originLat,
-        originLng: originLng,
-        destLat: destLat,
-        destLng: destLng,
-      ),
-      TripArrivedAtPickup(:final originLat, :final originLng, :final destLat, :final destLng) => _TripCoords(
-        originLat: originLat,
-        originLng: originLng,
-        destLat: destLat,
-        destLng: destLng,
-      ),
-      TripPassengerPickedUp(:final originLat, :final originLng, :final destLat, :final destLng) => _TripCoords(
-        originLat: originLat,
-        originLng: originLng,
-        destLat: destLat,
-        destLng: destLng,
-      ),
-      TripNavigatingToDestination(:final originLat, :final originLng, :final destLat, :final destLng) => _TripCoords(
-        originLat: originLat,
-        originLng: originLng,
-        destLat: destLat,
-        destLng: destLng,
-      ),
-      TripCompleted(:final originLat, :final originLng, :final destLat, :final destLng) => _TripCoords(
-        originLat: originLat,
-        originLng: originLng,
-        destLat: destLat,
-        destLng: destLng,
-      ),
+      final TripDispatchProposed s => _TripCoords(originLat: s.originLat, originLng: s.originLng, destLat: s.destLat, destLng: s.destLng),
+      final TripAccepted s => _TripCoords(originLat: s.originLat, originLng: s.originLng, destLat: s.destLat, destLng: s.destLng),
+      final TripNavigatingToPickup s => _TripCoords(originLat: s.originLat, originLng: s.originLng, destLat: s.destLat, destLng: s.destLng),
+      final TripArrivedAtPickup s => _TripCoords(originLat: s.originLat, originLng: s.originLng, destLat: s.destLat, destLng: s.destLng),
+      final TripPassengerPickedUp s => _TripCoords(originLat: s.originLat, originLng: s.originLng, destLat: s.destLat, destLng: s.destLng),
+      final TripNavigatingToDestination s => _TripCoords(originLat: s.originLat, originLng: s.originLng, destLat: s.destLat, destLng: s.destLng),
+      final TripCompleted s => _TripCoords(originLat: s.originLat, originLng: s.originLng, destLat: s.destLat, destLng: s.destLng),
       _ => null,
     };
   }
 
-  static String? _extractDriverId(TripState? state) {
+  static String? _extractDriverId(TripState state) {
     return switch (state) {
-      TripAccepted(:final driverId) => driverId,
-      TripNavigatingToPickup(:final driverId) => driverId,
-      TripArrivedAtPickup(:final driverId) => driverId,
-      TripPassengerPickedUp(:final driverId) => driverId,
-      TripNavigatingToDestination(:final driverId) => driverId,
-      TripCompleted(:final driverId) => driverId,
+      final TripAccepted s => s.driverId,
+      final TripNavigatingToPickup s => s.driverId,
+      final TripArrivedAtPickup s => s.driverId,
+      final TripPassengerPickedUp s => s.driverId,
+      final TripNavigatingToDestination s => s.driverId,
+      final TripCompleted s => s.driverId,
       _ => null,
     };
   }
@@ -306,11 +284,10 @@ class _TrackingMapState extends ConsumerState<_TrackingMap> {
 }
 
 class _StatusCard extends StatelessWidget {
-  const _StatusCard({required this.state, required this.tripId, required this.onReset});
+  const _StatusCard({required this.state, required this.tripId});
 
   final TripState state;
   final String tripId;
-  final VoidCallback onReset;
 
   bool get _isTerminal => state is TripCompleted || state is TripCancelled || state is TripFailed;
 
@@ -338,9 +315,9 @@ class _StatusCard extends StatelessWidget {
             ],
             if (_isTerminal) ...[
               const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(onPressed: onReset, child: const Text('새 호출')),
+              Text(
+                state is TripCompleted ? '운행이 완료되었습니다' : '운행이 종료되었습니다',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
           ],
@@ -392,39 +369,3 @@ class _StatusCard extends StatelessWidget {
   }
 }
 
-class _StatusCardLoading extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return const Card(
-      elevation: 4,
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-            SizedBox(width: 12),
-            Text('상태 확인 중...'),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusCardError extends StatelessWidget {
-  const _StatusCardError({required this.error});
-  final String error;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 4,
-      color: Theme.of(context).colorScheme.errorContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Text('오류: $error', style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer)),
-      ),
-    );
-  }
-}

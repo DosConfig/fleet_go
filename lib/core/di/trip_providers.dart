@@ -6,6 +6,7 @@ import '../../features/trip/data/repository/trip_repository_impl.dart';
 import '../../features/trip/domain/repository/trip_repository.dart';
 import '../../features/trip/domain/usecase/accept_trip.dart';
 import '../../features/trip/domain/usecase/advance_trip.dart';
+import '../../features/trip/domain/usecase/cancel_trip.dart';
 import '../../features/trip/domain/usecase/request_trip.dart';
 import '../../features/trip/domain/usecase/trip_state_machine.dart';
 
@@ -34,6 +35,16 @@ AcceptTrip acceptTrip(Ref ref) {
 @riverpod
 AdvanceTrip advanceTrip(Ref ref) {
   return AdvanceTrip(ref.watch(tripRepositoryProvider), ref.watch(tripStateMachineProvider));
+}
+
+@riverpod
+CancelTrip cancelTrip(Ref ref) {
+  return CancelTrip(ref.watch(tripRepositoryProvider), ref.watch(tripStateMachineProvider));
+}
+
+@riverpod
+Stream<(String, TripState)?> watchActiveTrip(Ref ref, String passengerId) {
+  return ref.watch(tripRepositoryProvider).watchActiveTrip(passengerId);
 }
 
 @riverpod
