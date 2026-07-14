@@ -48,6 +48,7 @@ ios/Flutter/Secrets.xcconfig
 docs/
 perf/
 ARCHITECTURE.md
+WORK_LOG.md
 .flutter-plugins
 *.freezed.dart
 *.g.dart
