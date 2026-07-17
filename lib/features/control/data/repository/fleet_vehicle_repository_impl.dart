@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:isolate';
 import 'dart:math';
+import 'dart:typed_data';
 
 import '../../domain/entity/fleet_vehicle.dart';
 import '../../domain/repository/fleet_vehicle_repository.dart';
@@ -22,6 +23,13 @@ class FleetVehicleRepositoryImpl implements FleetVehicleRepository {
   Isolate? _isolate;
   ReceivePort? _receivePort;
 
+  // 차량 ID는 불변이므로 매 틱 재생성하지 않고 한 번만 만들어 재사용
+  late final List<String> _ids = List.generate(
+    vehicleCount,
+    (i) => 'V-${(i + 1).toString().padLeft(5, '0')}',
+    growable: false,
+  );
+
   @override
   Stream<List<FleetVehicle>> watch() {
     if (_isolate == null) _startIsolate();
@@ -39,19 +47,24 @@ class FleetVehicleRepositoryImpl implements FleetVehicleRepository {
       ),
     );
     _receivePort!.listen((message) {
-      if (message is List<Map<String, dynamic>>) {
-        final vehicles = message
-            .map(
-              (m) => FleetVehicle(
-                vehicleId: m['vehicleId'] as String,
-                lat: m['lat'] as double,
-                lng: m['lng'] as double,
-                heading: m['heading'] as double,
-                speed: m['speed'] as double,
-                capturedAt: DateTime.fromMillisecondsSinceEpoch(m['capturedAt'] as int),
-              ),
-            )
-            .toList();
+      // isolate 경계 프로토콜: Map 리스트가 아닌 Float64List(타입드 데이터).
+      // Map 10만 개는 틱마다 구조 순회 직렬화로 메인 스레드를 수십 ms
+      // 태우지만, 타입드 데이터는 버퍼째로 저비용 전송된다.
+      // 레이아웃: [lat, lng, heading, speed] × vehicleCount
+      if (message is Float64List) {
+        final now = DateTime.now();
+        final vehicles = List<FleetVehicle>.generate(
+          vehicleCount,
+          (i) => FleetVehicle(
+            vehicleId: _ids[i],
+            lat: message[i * 4],
+            lng: message[i * 4 + 1],
+            heading: message[i * 4 + 2],
+            speed: message[i * 4 + 3],
+            capturedAt: now,
+          ),
+          growable: false,
+        );
         _controller.add(vehicles);
       }
     });
@@ -59,25 +72,27 @@ class FleetVehicleRepositoryImpl implements FleetVehicleRepository {
 
   static void _isolateEntry(_IsolateConfig config) {
     final random = Random(42);
-    final vehicles = List.generate(config.vehicleCount, (i) {
-      return {
-        'vehicleId': 'V-${(i + 1).toString().padLeft(3, '0')}',
-        'lat': 37.5665 + (random.nextDouble() - 0.5) * 0.04,
-        'lng': 126.9780 + (random.nextDouble() - 0.5) * 0.04,
-        'heading': random.nextDouble() * 360,
-        'speed': random.nextDouble() * 60,
-        'capturedAt': DateTime.now().millisecondsSinceEpoch,
-      };
-    });
+    final n = config.vehicleCount;
+
+    // 도심 ±0.15°(약 33km, 서울 전역 규모)로 분산 배치.
+    // 좁게 몰아두면 전 차량이 항상 화면 안이라 컬링/클러스터가 발동하지
+    // 않아 렌더 전략 B와 C의 차이를 측정할 수 없다.
+    // 레이아웃: [lat, lng, heading, speed] × n
+    final data = Float64List(n * 4);
+    for (var i = 0; i < n; i++) {
+      data[i * 4] = 37.5665 + (random.nextDouble() - 0.5) * 0.3;
+      data[i * 4 + 1] = 126.9780 + (random.nextDouble() - 0.5) * 0.3;
+      data[i * 4 + 2] = random.nextDouble() * 360; // heading
+      data[i * 4 + 3] = random.nextDouble() * 60; // speed
+    }
 
     Timer.periodic(Duration(milliseconds: config.tickIntervalMs), (_) {
-      for (final v in vehicles) {
-        v['lat'] = (v['lat'] as double) + (random.nextDouble() - 0.5) * 0.001;
-        v['lng'] = (v['lng'] as double) + (random.nextDouble() - 0.5) * 0.001;
-        v['capturedAt'] = DateTime.now().millisecondsSinceEpoch;
+      for (var i = 0; i < n; i++) {
+        data[i * 4] += (random.nextDouble() - 0.5) * 0.001;
+        data[i * 4 + 1] += (random.nextDouble() - 0.5) * 0.001;
       }
-
-      config.sendPort.send(List<Map<String, dynamic>>.from(vehicles.map((v) => Map<String, dynamic>.from(v))));
+      // 수신 측과 버퍼를 공유하지 않도록 복사본 전송 (타입드 데이터라 저비용)
+      config.sendPort.send(Float64List.fromList(data));
     });
   }
 
